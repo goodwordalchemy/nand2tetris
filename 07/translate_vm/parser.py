@@ -51,28 +51,28 @@ class Parser(object):
         if command in ARITHMETIC_COMMANDS:
             return 'C_ARITHMETIC'
 
-        if command == 'push':
+        elif command == 'push':
             return 'C_PUSH'
 
-        if command == 'pop':
+        elif command == 'pop':
             return 'C_POP'
 
-        if command == 'label':
+        elif command == 'label':
             return 'C_LABEL'
 
-        if command == 'goto':
+        elif command == 'goto':
             return 'C_GOTO'
 
-        if command == 'if-goto':
+        elif command == 'if-goto':
             return 'C_IF'
 
-        if command == 'function':
+        elif command == 'function':
             return 'C_FUNCTION'
 
-        if command == 'return':
+        elif command == 'return':
             return 'C_RETURN'
 
-        if command == 'call':
+        elif command == 'call':
             return 'C_CALL'
 
     def arg1(self):

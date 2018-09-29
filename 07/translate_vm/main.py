@@ -25,6 +25,8 @@ class Translator(object):
         parser = Parser(vm_filename)
         code_writer = self.code_writer
 
+        code_writer.set_file_name(vm_filename)
+
         while parser.has_more_commands():
             parser.advance()
 
@@ -33,15 +35,12 @@ class Translator(object):
             if command_type == 'C_ARITHMETIC':
                 code_writer.write_arithmetic(parser.arg1())
 
-            if command_type == 'C_PUSH':
+            elif command_type == 'C_PUSH':
                 code_writer.write_push_pop('C_PUSH', parser.arg1(), parser.arg2())
 
-            if command_type == 'C_POP':
-                pass
+            elif command_type == 'C_POP':
+                code_writer.write_push_pop('C_POP', parser.arg1(), parser.arg2())
 
-            if command_type == 'C_PUSH':
-
-                pass
 
 
 
