@@ -108,16 +108,13 @@ class CompilationEngine:
         self._compile_symbol() # }
 
     def _compile_subroutine_call(self):
-        print('token at beginning of compile subroutine: {}'.format(self.tokenizer.current_token))
         self._compile_identifier() # subroutineName | (className | varName)
 
         if self._is_symbol() and self._symbol_in('.'):
-            print('entered dot syntax in subroutine call')
             self._compile_symbol() # .
             self._compile_identifier() # subroutineName
 
         self._compile_symbol() # (
-        print('about to compile expression list: {}'.format(self.tokenizer.current_token))
         if not self._is_symbol() and self._symbol_in(')'):
             self.compile_expression_list()
         self._compile_symbol() # )
@@ -232,10 +229,8 @@ class CompilationEngine:
 
     @_wrap_output_in_xml_tag('doStatement')
     def compile_do(self):
-        print('started subroutine call in compile_do')
         self._compile_keyword() # do
         self._compile_subroutine_call()
-        print('finished subroutine call in compile_do')
         self._compile_symbol() # ;
 
     @_wrap_output_in_xml_tag('letStatment')
@@ -335,7 +330,6 @@ class CompilationEngine:
                 self._compile_subroutine_call()  # subroutineName ( expressionList )
 
         else:
-            print(self.tokenizer.current_token)
             raise Exception('Could not parse terminal')
 
     @_wrap_output_in_xml_tag('expressionList')
