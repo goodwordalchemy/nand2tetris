@@ -89,16 +89,16 @@ class CompilationEngine:
         self.tokenizer.advance()
 
     def _compile_type(self):
-        if self._is_keyword(self) and _keyword_in(['int', 'char', 'boolean']):
+        if self._is_keyword() and self._keyword_in(['int', 'char', 'boolean']):
             self._compile_keyword() # built-in type
 
-        elif self.tokenizer._is_identifier():
+        elif self._is_identifier():
             self._compile_identifier() # custom type
 
         else:
             raise Exception('Error compiling type')
 
-    def _compile_subroutine_body()
+    def _compile_subroutine_body(self):
         self._compile_symbol() # {
 
         while self._is_keyword() and self._keyword_in('var'):
@@ -108,14 +108,18 @@ class CompilationEngine:
         self._compile_symbol() # }
 
     def _compile_subroutine_call(self):
+        print('token at beginning of compile subroutine: {}'.format(self.tokenizer.current_token))
         self._compile_identifier() # subroutineName | (className | varName)
 
         if self._is_symbol() and self._symbol_in('.'):
+            print('entered dot syntax in subroutine call')
             self._compile_symbol() # .
             self._compile_identifier() # subroutineName
 
         self._compile_symbol() # (
-        self.compile_expression_list()
+        print('about to compile expression list: {}'.format(self.tokenizer.current_token))
+        if not self._is_symbol() and self._symbol_in(')'):
+            self.compile_expression_list()
         self._compile_symbol() # )
 
     @_wrap_output_in_xml_tag('class')
@@ -153,7 +157,7 @@ class CompilationEngine:
     @_wrap_output_in_xml_tag('subroutineDec')
     def compile_subroutine(self):
         if not self._keyword_in(SUBROUTINE_KEYWORDS):
-            raise Exception('subroutine declarations should be in {}'.format(SUBROUTINE_KEYWORDS)
+            raise Exception('subroutine declarations should be in {}'.format(SUBROUTINE_KEYWORDS))
         self._compile_keyword()  # ('constructor' | 'function' | 'method')
 
         if self._is_keyword() and self._keyword_in('void'):
@@ -165,7 +169,6 @@ class CompilationEngine:
         self._compile_symbol() # (
         self.compile_parameter_list()
         self._compile_symbol() # )
-        self._compile_symbol() # {
 
         self._compile_subroutine_body()
 
@@ -229,8 +232,10 @@ class CompilationEngine:
 
     @_wrap_output_in_xml_tag('doStatement')
     def compile_do(self):
+        print('started subroutine call in compile_do')
         self._compile_keyword() # do
         self._compile_subroutine_call()
+        print('finished subroutine call in compile_do')
         self._compile_symbol() # ;
 
     @_wrap_output_in_xml_tag('letStatment')
@@ -288,7 +293,7 @@ class CompilationEngine:
     def compile_expression(self):
         self.compile_term()
 
-        if self._is_symbol() and self._symbol_in(OP_SYMBOLS):
+        while self._is_symbol() and self._symbol_in(OP_SYMBOLS):
             self._compile_symbol() # op
             self.compile_term()
 
@@ -325,11 +330,12 @@ class CompilationEngine:
                 self.compile_expression() # expression
                 self._compile_symbol() # ]
 
-            elif self.is_symbol() and self._symbol_in('.'):
+            elif self._is_symbol() and self._symbol_in('.'):
                 self._compile_symbol() # .
                 self._compile_subroutine_call()  # subroutineName ( expressionList )
 
         else:
+            print(self.tokenizer.current_token)
             raise Exception('Could not parse terminal')
 
     @_wrap_output_in_xml_tag('expressionList')
