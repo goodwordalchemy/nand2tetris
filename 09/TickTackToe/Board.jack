@@ -1,0 +1,54 @@
+class Board {
+    field Array rep;
+    
+    constructor Board new() {
+        var char charIdx;
+        var int idx;
+
+        let rep = Array.new(9);
+        
+        let rep[0] = "0"; 
+        let rep[1] = "1";
+        let rep[2] = "2";
+        let rep[3] = "3";
+        let rep[4] = "4";
+        let rep[5] = "5";
+        let rep[6] = "6";
+        let rep[7] = "7";
+        let rep[8] = "8";
+        
+        return this;
+    }
+
+    method void update(int choice, String player) {
+        let rep[choice] = player;
+
+        return;
+    }
+
+    method void draw(){
+        var int row, col;
+        var String currentChar;
+        
+        let row = 0;
+        while (row < 3) {
+            let col = 0;
+            while (col < 3) {
+                let currentChar = rep[(row * 3) + col];
+                
+                do Output.moveCursor(row, col);
+                do Output.printString(currentChar);
+
+                let col = col + 1;
+            }
+
+            let row = row + 1;
+            
+            do Output.println();
+            
+        }
+        
+        return;
+    }
+}
+

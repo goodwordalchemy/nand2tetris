@@ -1,0 +1,48 @@
+class Game {
+    field Board board;
+    field int turn;
+
+    constructor Game new() {
+        let board = Board.new();
+        
+        let turn = 0;
+        
+        return this;
+    }
+
+    method void start() {
+        do board.draw();
+
+        while (true) {
+            do takeTurn();
+        }
+        
+        return;
+    }
+
+    method void takeTurn() {
+        var int choice;
+        var String player;
+        var String outputString;
+
+
+        let turn = ~turn;
+
+        if (turn = 0) { let player = "o"; }
+        else { let player = "x"; }
+
+        do Output.println();
+        do Output.printString(player);
+
+        let outputString = String.new(40);
+        let outputString = "'s turn.  Choose number and press enter.";
+
+        let choice = Keyboard.readInt(outputString);
+
+        do board.update(choice, player);
+
+        do board.draw();
+
+        return;
+    }
+}

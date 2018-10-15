@@ -25,27 +25,37 @@ class Parser(object):
 
         self.input = _clean_input(input_file)
 
+        self.reset()
+
+    def reset(self):
         self.current_command = None
-        self.pc = -1  # Processed up to line number.
+        self.line_num_in_file = -1
 
     def hasMoreCommands(self):
-        return len(self.input) > self.pc
+        return len(self.input) > self.line_num_in_file + 1
 
     def advance(self):
-        self.pc += 1
-        if self.hasMoreCommands():
-            self.current_command =  self.input[self.pc]
+        if not self.hasMoreCommands():
+            raise Exception('No more commands in file')
+
+        self.line_num_in_file += 1
+
+        self.current_command =  self.input[self.line_num_in_file]
 
     def commandType(self):
-        if re.match('@[\w+|\d+\.\d*]', self.current_command):
+        if re.match('@[\D+.+|\d+\.\d*]', self.current_command):
             return 'A_COMMAND'
-        elif re.match('\(\w+\)', self.current_command):
+
+        elif re.match('\(\D+.*\)', self.current_command):
             return 'L_COMMAND'
         return 'C_COMMAND'
 
     def symbol(self):
         if self.commandType() == 'L_COMMAND':
-            return re.match('\((\w+)\)', self.current_command).string
+            match = re.match('\((\D+.*)\)', self.current_command)
+
+            if match:
+                return match.group(1)
 
         if self.commandType() == 'A_COMMAND':
             return re.match('@(.+)', self.current_command).string
