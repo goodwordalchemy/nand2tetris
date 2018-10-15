@@ -29,6 +29,7 @@ def _remove_comments(content):
 
     return content
 
+
 def _pad_lexical_symbols(content):
     for st in SYMBOL_TOKENS:
         content = content.replace(st, ' {} '.format(st))
@@ -86,37 +87,39 @@ class JackTokenizer:
         if not self.token_type() == 'KEYWORD':
             raise Exception(EXCEPTION_FORMAT.format('KEYWORD'))
 
-        return self.current_token
+        return '<keyword> {} </keyword>\n'.format(self.current_token)
 
     def symbol(self):
         if not self.token_type() == 'SYMBOL':
             raise Exception(EXCEPTION_FORMAT.format('SYMBOL'))
 
-        return self.current_token
+        return '<symbol> {} </symbol>\n'.format(
+            SYMBOL_REPLACEMENT_MAPPER.get(self.current_token, self.current_token)
+        )
 
     def int_val(self):
         if not self.token_type() == 'INT_CONST':
             raise Exception(EXCEPTION_FORMAT.format('INT_CONST'))
 
-        return self.current_token
+        return '<integerConstant> {} </integerConstant>\n'.format(self.current_token)
 
     def identifier(self):
         if not self.token_type() == 'IDENTIFIER':
             raise Exception(EXCEPTION_FORMAT.format('IDENTIFIER'))
 
-        return self.current_token
+        return '<identifier> {} </identifier>\n'.format(self.current_token)
 
     def string_val(self):
         if not self.token_type() == 'STRING_CONST':
             raise Exception(EXCEPTION_FORMAT.format('STRING_CONST'))
 
-        return self.current_token[1:-1]
+        return '<stringConstant> {} </stringConstant>\n'.format(self.current_token[1:-1])
 
 
 def tokenize_jack_file(input_file):
     tokenizer = JackTokenizer(input_file)
 
-    output = '<tokens>\n'
+    output = ''
 
     while tokenizer.has_more_tokens():
         tokenizer.advance()
@@ -124,29 +127,32 @@ def tokenize_jack_file(input_file):
         token_type = tokenizer.token_type()
 
         if token_type == 'KEYWORD':
-            output += '<keyword> {} </keyword>\n'.format(tokenizer.key_word())
+            output += tokenizer.key_word()
 
         elif token_type == 'SYMBOL':
-            output += '<symbol> {} </symbol>\n'.format(
-                SYMBOL_REPLACEMENT_MAPPER.get(tokenizer.symbol(), tokenizer.symbol())
-            )
+            output += tokenizer.symbol()
 
         elif token_type == 'INT_CONST':
-            output += '<integerConstant> {} </integerConstant>\n'.format(tokenizer.int_val())
+            output += tokenizer.int_val()
 
         elif token_type == 'STRING_CONST':
-            output += '<stringConstant> {} </stringConstant>\n'.format(tokenizer.string_val())
+            output += tokenizer.string_val()
 
         elif token_type == 'IDENTIFIER':
-            output += '<identifier> {} </identifier>\n'.format(tokenizer.identifier())
+            output += tokenizer.identifier()
 
-    output += '</tokens>'
+    return output
+
+
+def _wrap_output_in_token_tags(output):
+    output = '<tokens>\n' + output + '</tokens>'
 
     return output
 
 
 def main(input_file):
     output = tokenize_jack_file(input_file)
+    output = _wrap_output_in_token_tags(output)
 
     output_filename = get_output_filename(input_file, output_file_ext='T.xml')
     print('tokenizer created file: {}'.format(output_filename))
