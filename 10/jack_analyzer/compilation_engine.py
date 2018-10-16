@@ -1,5 +1,7 @@
 import functools
 
+INDENT_CHAR = '  '
+
 def _xml_tag(tagname, inner):
     return '<{tagname}> {inner} </{tagname}>\n'.format(
         tagname=tagname, inner=inner
@@ -10,7 +12,7 @@ def _xml_tag_list(tagname, inner_list):
 
 CLASS_VAR_DEC_KEYWORD = ['static', 'field']
 KEYWORD_CONSANT_KEYWORDS = ['true', 'false', 'null', 'this']
-OP_SYMBOLS = ['+', '-', '*', '/', '&', '|', '<', '>', '=']
+OP_SYMBOLS = ['+', '-', '*', '/', '&amp;', '|', '&lt;', '&gt;', '=']
 STATEMENT_KEYWORDS = ['let', 'if', 'while', 'do', 'return']
 SUBROUTINE_KEYWORDS = ['constructor', 'function', 'method']
 UNARY_OP_KEYWORDS = ['-', '~']
@@ -20,20 +22,31 @@ class CompilationEngine:
         self.tokenizer = tokenizer
         self.tokenizer.advance()
         self.output_handle = open(output_filename, 'w')
+        self.recursion_depth = 0
+
+    def _print_current_token(self, message=''):
+        print(message, self.tokenizer.current_token)
+
+    def _get_indent(self):
+        return INDENT_CHAR * self.recursion_depth
 
     def _wrap_output_in_xml_tag(tagname):
         def decorator_wrap_output(func):
             @functools.wraps(func)
             def wrap(self):
                 self._write('<{}>\n'.format(tagname))
+                self.recursion_depth += 1
+
                 func(self)
+
+                self.recursion_depth -= 1
                 self._write('</{}>\n'.format(tagname))
 
             return wrap
         return decorator_wrap_output
 
     def _write(self, content):
-        self.output_handle.write(content)
+        self.output_handle.write(self._get_indent() + content)
 
     def _is_identifier(self):
         return self.tokenizer.token_type() == 'IDENTIFIER'
@@ -98,7 +111,8 @@ class CompilationEngine:
         else:
             raise Exception('Error compiling type')
 
-    def _compile_subroutine_body(self):
+    @_wrap_output_in_xml_tag('subroutineBody')
+    def compile_subroutine_body(self):
         self._compile_symbol() # {
 
         while self._is_keyword() and self._keyword_in('var'):
@@ -115,8 +129,7 @@ class CompilationEngine:
             self._compile_identifier() # subroutineName
 
         self._compile_symbol() # (
-        if not self._is_symbol() and self._symbol_in(')'):
-            self.compile_expression_list()
+        self.compile_expression_list()
         self._compile_symbol() # )
 
     @_wrap_output_in_xml_tag('class')
@@ -167,7 +180,7 @@ class CompilationEngine:
         self.compile_parameter_list()
         self._compile_symbol() # )
 
-        self._compile_subroutine_body()
+        self.compile_subroutine_body()
 
     @_wrap_output_in_xml_tag('parameterList')
     def compile_parameter_list(self):
@@ -233,7 +246,7 @@ class CompilationEngine:
         self._compile_subroutine_call()
         self._compile_symbol() # ;
 
-    @_wrap_output_in_xml_tag('letStatment')
+    @_wrap_output_in_xml_tag('letStatement')
     def compile_let(self):
         self._compile_keyword() # let
         self._compile_identifier() # varName
@@ -334,6 +347,9 @@ class CompilationEngine:
 
     @_wrap_output_in_xml_tag('expressionList')
     def compile_expression_list(self):
+        if self._is_symbol() and self._symbol_in(')'):
+            return
+
         self.compile_expression()
 
         while self._is_symbol() and self._symbol_in(','):
