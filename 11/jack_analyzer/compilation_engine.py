@@ -1,14 +1,29 @@
 import functools
+import re
+
+from .symbol_table import SymbolTable
 
 INDENT_CHAR = '  '
+TERMINAL_TAG_PATTERN =  r'^<(\w+?)> (\S+?) </\w+>\n$'
 
 def _xml_tag(tagname, inner):
     return '<{tagname}> {inner} </{tagname}>\n'.format(
         tagname=tagname, inner=inner
     )
 
+def _get_terminal_value(tag):
+    match = re.match(TERMINAL_TAG_PATTERN, tag)
+
+    if not match:
+        raise Exception(f'this function should only be called on terminal tags: {tag}')
+
+    value = match.group(2)
+
+    return value
+
 def _xml_tag_list(tagname, inner_list):
     return [_xml_tag(tagname, il) for il in inner_list]
+
 
 CLASS_VAR_DEC_KEYWORD = ['static', 'field']
 KEYWORD_CONSANT_KEYWORDS = ['true', 'false', 'null', 'this']
@@ -23,6 +38,8 @@ class CompilationEngine:
         self.tokenizer.advance()
         self.output_handle = open(output_filename, 'w')
         self.recursion_depth = 0
+
+        self.symbol_table = SymbolTable()
 
     def _print_current_token(self, message=''):
         print(message, self.tokenizer.current_token)
@@ -47,6 +64,27 @@ class CompilationEngine:
 
     def _write(self, content):
         self.output_handle.write(self._get_indent() + content)
+
+    def _write_identifier_string(self, category, defined_or_used, kind, st_index):
+        self._write(f'\tcategory: {category}\n')
+        self._write(f'\tdefined or used?: {defined_or_used}\n')
+        self._write(f'\trepresents one of [var, argument, static, field]: {kind}\n')
+        self._write(f'\tsymbol table index: {st_index}\n')
+
+    def _get_identifier(self):
+        return self.tokenizer.identifier()
+
+    def _get_symbol(self):
+        return self.tokenizer.symbol()
+
+    def _get_keyword(self):
+        return self.tokenizer.key_word()
+
+    def _get_int_const(self):
+        return self.tokenizer.int_val()
+
+    def _get_string_const(self):
+        return self.tokenizer.string_val()
 
     def _is_identifier(self):
         return self.tokenizer.token_type() == 'IDENTIFIER'
@@ -82,34 +120,52 @@ class CompilationEngine:
                 (self.tokenizer.symbol() in token_list))
 
     def _compile_int(self):
-        self._write(self.tokenizer.int_val())
+        int_value = self._get_int_const()
+        self._write(int_value)
         self.tokenizer.advance()
+
+        return _get_terminal_value(int_value)
 
     def _compile_string(self):
-        self._write(self.tokenizer.string_val())
+        string_value = self._get_string_const()
+        self._write(string_value)
         self.tokenizer.advance()
+
+        return _get_terminal_value(string_value)
 
     def _compile_identifier(self):
-        self._write(self.tokenizer.identifier())
+        identifier_value = self.tokenizer.identifier()
+        self._write(identifier_value)
         self.tokenizer.advance()
+
+        return _get_terminal_value(identifier_value)
 
     def _compile_keyword(self):
-        self._write(self.tokenizer.key_word())
+        keyword_value = self.tokenizer.key_word()
+        self._write(keyword_value)
         self.tokenizer.advance()
 
+        return _get_terminal_value(keyword_value)
+
     def _compile_symbol(self):
-        self._write(self.tokenizer.symbol())
+        symbol_value = self.tokenizer.symbol()
+        self._write(symbol_value)
         self.tokenizer.advance()
+
+        return _get_terminal_value(symbol_value)
 
     def _compile_type(self):
         if self._is_keyword() and self._keyword_in(['int', 'char', 'boolean']):
-            self._compile_keyword() # built-in type
+            type_ = self._compile_keyword() # built-in type
 
         elif self._is_identifier():
-            self._compile_identifier() # custom type
+            name = type_ = self._compile_identifier() # custom type
+            self._write_identifier_string('class', 'used', False, False)
 
         else:
             raise Exception('Error compiling type')
+
+        return type_
 
     @_wrap_output_in_xml_tag('subroutineBody')
     def compile_subroutine_body(self):
@@ -122,11 +178,19 @@ class CompilationEngine:
         self._compile_symbol() # }
 
     def _compile_subroutine_call(self):
-        self._compile_identifier() # subroutineName | (className | varName)
+        name = self._compile_identifier() # subroutineName | (className | varName)
 
         if self._is_symbol() and self._symbol_in('.'):
+            if name in self.symbol_table:
+                kind = self.kind_of(name)
+                index = self.index_of(name)
+                self._write_identifier_string(kind, 'used', kind, index)
+            else:
+                self._write_identifier_string('class', 'used', False, False)
+
             self._compile_symbol() # .
             self._compile_identifier() # subroutineName
+            self._write_identifier_string('subroutine', 'used', False, False)
 
         self._compile_symbol() # (
         self.compile_expression_list()
@@ -135,8 +199,9 @@ class CompilationEngine:
     @_wrap_output_in_xml_tag('class')
     def compile_class(self):
         # Tokenzizer is already advanced, like in other methods.
-        self._compile_keyword() # class
-        self._compile_identifier() # className
+        category = self._compile_keyword() # class
+        name = self._compile_identifier() # className
+        self._write_identifier_string(category, 'defined', False, None)
         self._compile_symbol() # {
 
         while self._keyword_in(CLASS_VAR_DEC_KEYWORD):
@@ -152,15 +217,20 @@ class CompilationEngine:
     def compile_class_var_dec(self):
         if not self._keyword_in(['static', 'field']):
             raise Exception('class variable declarations must start with "static" or "field"')
-        self._compile_keyword() # field or static
 
-        self._compile_type() # type
-
-        self._compile_identifier() # varName
+        kind = self._compile_keyword() # field or static
+        type_ = self._compile_type() # type
+        name = self._compile_identifier() # varName
+        self.symbol_table.define(name, type_, kind)
+        index = self.symbol_table.index_of(name)
+        self._write_identifier_string(kind, 'defined', kind, index)
 
         while self._is_symbol() and self._symbol_in(','):
             self._compile_symbol() # ','
-            self._compile_identifier() # varName
+            name = self._compile_identifier() # varName
+            self.symbol_table.define(name, type_, kind)
+            index = self.symbol_table.index_of(name)
+            self._write_identifier_string(kind, 'defined', kind, index)
 
         self._compile_symbol() # ';'
 
@@ -168,14 +238,18 @@ class CompilationEngine:
     def compile_subroutine(self):
         if not self._keyword_in(SUBROUTINE_KEYWORDS):
             raise Exception('subroutine declarations should be in {}'.format(SUBROUTINE_KEYWORDS))
+        self.symbol_table.start_subroutine()
         self._compile_keyword()  # ('constructor' | 'function' | 'method')
 
         if self._is_keyword() and self._keyword_in('void'):
             self._compile_keyword() # void
+            type_ = None
         else:
-            self._compile_type()
+            type_ = self._compile_type()
 
-        self._compile_identifier() # subroutineName
+        name = self._compile_identifier() # subroutineName
+        self._write_identifier_string('subroutine', 'defined', False, None)
+
         self._compile_symbol() # (
         self.compile_parameter_list()
         self._compile_symbol() # )
@@ -184,38 +258,42 @@ class CompilationEngine:
 
     @_wrap_output_in_xml_tag('parameterList')
     def compile_parameter_list(self):
-        while ((self.tokenizer.token_type() == 'KEYWORD') or
-               (self.tokenizer.token_type() == 'IDENTIFIER')):
+        while self._is_keyword() or self._is_identifier():
 
-            if self.tokenizer.token_type() == 'KEYWORD':
-                self._write(self.tokenizer.key_word()) # built-in type
+            if self._is_keyword():
+                type_ = self._compile_keyword() # built-in type
 
-            elif self.tokenizer.token_type() == 'IDENTIFIER':
-                self._write(self.tokenizer.identifier()) # custom type
+            elif self._is_identifier():
+                name = self._compile_identifier() # custom type
+                self._write_identifier_string('class', 'used', False, False)
+                type_ = self.symbol_table.type_of(name)
 
-            self.tokenizer.advance()
-            self._write(self.tokenizer.identifier()) # varName
+            name = self._compile_identifier() # varName
+            self.symbol_table.define(name, type_, 'ARG')
+            index = self.symbol_table.index_of(name)
+            self._write_identifier_string('argument', 'defined', 'argument', index)
 
-            self.tokenizer.advance()
-
-            if ((self.tokenizer.token_type() == 'SYMBOL') and
-                (self.tokenizer.symbol() == _xml_tag('symbol', ','))):
-                self._write(self.tokenizer.symbol()) # ","
-                self.tokenizer.advance()
+            if self._is_symbol() and self._symbol_in(','):
+                self._compile_symbol()
 
     @_wrap_output_in_xml_tag('varDec')
     def compile_var_dec(self):
         if not self._keyword_in('var'):
             raise Exception('variable declaration must start with "var"')
-        self._compile_keyword() # var
+        kind = self._compile_keyword() # var
+        type_ = self._compile_type()
 
-        self._compile_type()
-
-        self._compile_identifier() # varName
+        name = self._compile_identifier() # varName
+        self.symbol_table.define(name, type_, kind)
+        st_index = self.symbol_table.index_of(name)
+        self._write_identifier_string(kind, 'defined', kind, st_index)
 
         while self._is_symbol() and self._symbol_in(','):
             self._compile_symbol() # ,
             self._compile_identifier() # varName
+            self.symbol_table.define(name, type_, kind)
+            st_index = self.symbol_table.index_of(name)
+            self._write_identifier_string(kind, 'defined', kind, st_index)
 
         self._compile_symbol() # ;
 
@@ -249,7 +327,11 @@ class CompilationEngine:
     @_wrap_output_in_xml_tag('letStatement')
     def compile_let(self):
         self._compile_keyword() # let
-        self._compile_identifier() # varName
+
+        name = self._compile_identifier() # varName
+        kind = self.symbol_table.kind_of(name)
+        index = self.symbol_table.index_of(name)
+        self._write_identifier_string(kind, 'used', kind, index)
 
         if self._is_symbol() and self._symbol_in('['):
             self._compile_symbol() # [
@@ -331,7 +413,10 @@ class CompilationEngine:
         # subroutineCall: subroutineName ( expressionList ) |
         #                 (className | varName) . subroutineName ( expressionList )
         elif self._is_identifier():
-            self._compile_identifier() # subroutineName | className | varName
+            name = self._compile_identifier() # subroutineName | className | varName
+            kind = self.symbol_table.kind_of(name)
+            index = self.symbol_table.index_of(name)
+            self._write_identifier_string(kind, 'used', kind, index)
 
             if self._is_symbol() and self._symbol_in('['):
                 self._compile_symbol() # [
