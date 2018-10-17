@@ -2,6 +2,7 @@ import functools
 import re
 
 from .symbol_table import SymbolTable
+from .vm_writer import VMWriter
 
 INDENT_CHAR = '  '
 TERMINAL_TAG_PATTERN =  r'^<(\w+?)> (\S+?) </\w+>\n$'
@@ -40,6 +41,7 @@ class CompilationEngine:
         self.recursion_depth = 0
 
         self.symbol_table = SymbolTable()
+        self.vm_writer = VMWriter(self.output_handle)
 
     def _print_current_token(self, message=''):
         print(message, self.tokenizer.current_token)
