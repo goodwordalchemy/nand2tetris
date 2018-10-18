@@ -295,27 +295,20 @@ class CompilationEngine:
     def compile_var_dec(self):
         if not self._keyword_in('var'):
             raise Exception('variable declaration must start with "var"')
-        num_vars_declared = 1
 
         kind = self._compile_keyword() # var
         type_ = self._compile_type()
 
         name = self._compile_identifier() # varName
         self.symbol_table.define(name, type_, kind)
-        st_index = self.symbol_table.index_of(name)
 
         while self._is_symbol() and self._symbol_in(','):
-            num_vars_declared += 1
-
             self._compile_symbol() # ,
+
             name = self._compile_identifier() # varName
             self.symbol_table.define(name, type_, kind)
-            st_index = self.symbol_table.index_of(name)
 
         self._compile_symbol() # ;
-
-
-        return num_vars_declared
 
     @_wrap_output_in_xml_tag('statements')
     def compile_statements(self):
