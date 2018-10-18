@@ -125,12 +125,21 @@ class CompilationEngine:
         self._write(int_value)
         self.tokenizer.advance()
 
+        self.vm_writer.write_push('constant', int_value)
+
         return _get_terminal_value(int_value)
 
     def _compile_string(self):
         string_value = self._get_string_const()
         self._write(string_value)
         self.tokenizer.advance()
+
+        self.vm_writer.write_push('constant', len(string_value))
+        self.vm_writer.write_call('String.new', 1)
+
+        for letter in string_value:
+            self.vm_writer.write_push('constant', ord(letter))
+            self.vm_writer.write_call('String.appendChar', 2)
 
         return _get_terminal_value(string_value)
 
@@ -344,23 +353,13 @@ class CompilationEngine:
         self._compile_keyword() # let
 
         name = self._compile_identifier() # varName
-        kind = self.symbol_table.kind_of(name)
+        segment = self.symbol_table.kind_of(name)
         index = self.symbol_table.index_of(name)
-
-        object_field = False
-        if kind == 'FIELD':
-            object_field = True
-            kind = 'this'
-            self.vm_writer.write_push('pointer', 0)
-            self.vm_writer.write_push('this', 0)
-            self.vm_writer.write_push('constant', index)
-            self.vm_writer.write_arithmetic('add')
-            self.vm_writer.write_pop('pointer', 0)
 
         array_entry = False
         if self._is_symbol() and self._symbol_in('['):
             array_entry = True
-            self.vm_writer.write_push(kind, index)
+            self.vm_writer.write_push(segment, index)
             self._compile_symbol() # [
             result = self.compile_expression()
             self._compile_symbol() # ]
@@ -372,13 +371,9 @@ class CompilationEngine:
 
         if array_entry:
             self.vm_writer.write_pop('that', 0)
-        if object_field:
-            self.vm_writer.write_pop('this', 0)
-            self.vm_writer.write_pop('pointer', 0)
 
-        if not object_field and not array_entry:
-            print(f'compile_let...leftovers: kind: {kind}, index: {index}, name: {name}, class: {self.class_name}')
-            self.vm_writer.write_pop(kind, index)
+        else:
+            self.vm_writer.write_pop(segment, index)
 
         self._compile_symbol() # ;
 
@@ -451,31 +446,37 @@ class CompilationEngine:
             operation = OP_SYMBOL_TO_VM_COMMAND_MAPPER[symbol]
             self.vm_writer.write_arithmetic(operation)
 
+    def _compile_keyword_contant(self):
+        kw = self._compile_keyword()
+
+        if kw in ['null', 'false']:
+            self.vm_writer.write_push('constant', 0)
+
+        else:
+            self.vm_writer.write_push('constant', 1)
+            command = UNARY_OP_SYMBOL_TO_CM_COMMAND_MAPPER['-']
+            self.vm_writer.write_arithmetic(command)
+
+        return kw
+
+    def _compile_unary_op(self):
+        symbol = self._compile_symbol() # unaryOp
+
+        self.compile_term()
+
+        operation = UNARY_OP_SYMBOL_TO_CM_COMMAND_MAPPER[symbol]
+        self.vm_writer.write_arithmetic(operation)
+
     @_wrap_output_in_xml_tag('term')
     def compile_term(self):
         if self._is_int_const():
-            value = self._compile_int()
-            self.vm_writer.write_push('constant', value)
+            self._compile_int()
 
         elif self._is_string_const():
-            string = self._compile_string()
-
-            self.vm_writer.write_push('constant', len(string))
-            self.vm_writer.write_call('String.new', 1)
-
-            for letter in string:
-                self.vm_writer.write_push('constant', ord(letter))
-                self.vm_writer.write_call('String.appendChar', 2)
+            self._compile_string()
 
         elif self._is_keyword() and self._keyword_in(KEYWORD_CONSANT_KEYWORDS):
-            kw = self._compile_keyword()
-
-            if kw in ['null', 'false']:
-                self.vm_writer.write_push('constant', 0)
-            else:
-                self.vm_writer.write_push('constant', 1)
-                command = UNARY_OP_SYMBOL_TO_CM_COMMAND_MAPPER['-']
-                self.vm_writer.write_arithmetic(command)
+            self._compile_keyword_contant()
 
         elif self._is_symbol() and self._symbol_in('('): # ( expression )
             self._compile_symbol()
@@ -483,12 +484,7 @@ class CompilationEngine:
             self._compile_symbol()
 
         elif self._is_symbol() and self._symbol_in(UNARY_OP_KEYWORDS):
-            symbol = self._compile_symbol() # unaryOp
-
-            self.compile_term()
-
-            operation = UNARY_OP_SYMBOL_TO_CM_COMMAND_MAPPER[symbol]
-            self.vm_writer.write_arithmetic(operation)
+            self._compile_unary_op()
 
         # varName |
         # varName[expression] |
@@ -498,17 +494,6 @@ class CompilationEngine:
             name = self._compile_identifier() # subroutineName | className | varName
             kind = self.symbol_table.kind_of(name)
             index = self.symbol_table.index_of(name)
-
-
-            object_field = False
-            if kind == 'FIELD':
-                object_field = True
-                kind = 'this'
-                self.vm_writer.write_push('pointer', 0)
-                self.vm_writer.write_push('this', 0)
-                self.vm_writer.write_push('constant', index)
-                self.vm_writer.write_arithmetic('add')
-                self.vm_writer.write_pop('pointer', 0)
 
             if self._is_symbol() and self._symbol_in('['):
                 self.vm_writer.write_push(kind, index)
@@ -535,10 +520,6 @@ class CompilationEngine:
                 self.vm_writer.write_call(name, n_args)
             else:
                 self.vm_writer.write_push(kind, index)
-
-            if object_field:
-                self.vm_writer.write_pop('this', 0)
-                self.vm_writer.write_pop('pointer', 0)
 
         else:
             raise Exception('Could not parse terminal')
