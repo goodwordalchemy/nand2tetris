@@ -278,20 +278,14 @@ class CompilationEngine:
         self.compile_statements()
         self._compile_symbol() # }
 
+
     @_wrap_output_in_xml_tag('parameterList')
     def compile_parameter_list(self):
         while self._is_keyword() or self._is_identifier():
-            if self._is_keyword():
-                type_ = self._compile_keyword() # built-in type
-
-            elif self._is_identifier():
-                name = self._compile_identifier() # custom type
-                type_ = self.symbol_table.type_of(name)
-
+            type_ = self._compile_type()
             name = self._compile_identifier() # varName
+
             self.symbol_table.define(name, type_, 'ARG')
-            index = self.symbol_table.index_of(name)
-            print(f'compile_parameter_list...name: {name}, index: {index}')
 
             if self._is_symbol() and self._symbol_in(','):
                 self._compile_symbol()
