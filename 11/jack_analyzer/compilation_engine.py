@@ -388,6 +388,7 @@ class CompilationEngine:
 
         array_entry = False
         if self._is_symbol() and self._symbol_in('['):
+            # self.vm_writer._write('## BEGINNING OF ARRAY ACCESS ##')
             array_entry = True
             self.vm_writer.write_push(kind, index)
             self._compile_symbol() # [
@@ -395,6 +396,7 @@ class CompilationEngine:
             self._compile_symbol() # ]
             self.vm_writer.write_arithmetic('add')
             self.vm_writer.write_pop('pointer', 1)
+            # self.vm_writer._write('## END OF ARRAY ACCESS ##')
 
         self._compile_symbol() # =
         self.compile_expression()
@@ -524,6 +526,7 @@ class CompilationEngine:
                 self._compile_symbol() # ]
                 self.vm_writer.write_arithmetic('add')
                 self.vm_writer.write_pop('pointer', 1)
+                self.vm_writer.write_push('that', 0)
 
             elif self._is_symbol() and self._symbol_in('.'):
                 print(f'compile term...correctly identified class membership (.)')
