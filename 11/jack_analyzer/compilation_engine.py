@@ -437,26 +437,30 @@ class CompilationEngine:
 
     @_wrap_output_in_xml_tag('ifStatement')
     def compile_if(self):
+        if_index = self.if_counter
+        self.if_counter += 1
+
         self._compile_keyword() # if
         self._compile_symbol() # (
         self.compile_expression()
-        self.vm_writer.write_if(f'IF_TRUE{self.if_counter}')
+        self.vm_writer.write_arithmetic(UNARY_OP_SYMBOL_TO_CM_COMMAND_MAPPER['~'])
+        self.vm_writer.write_if(f'IF_FALSE{if_index}') # L1
         self._compile_symbol() # )
 
         self._compile_symbol() # {
-        self.vm_writer.write_goto(f'IF_FALSE{self.if_counter}')
-        self.vm_writer.write_label(f'IF_TRUE{self.if_counter}')
         self.compile_statements()
         self._compile_symbol() # }
 
+        self.vm_writer.write_goto(f'IF_TRUE{if_index}') # L2
+        self.vm_writer.write_label(f'IF_FALSE{if_index}') # L1
+
         if self._is_keyword() and self._keyword_in('else'):
-            self.vm_writer.write_label(f'IF_FALSE{self.if_counter}')
             self._compile_keyword() # else
             self._compile_symbol() # {
             self.compile_statements()
             self._compile_symbol() # }
+        self.vm_writer.write_label(f'IF_TRUE{if_index}')
 
-        self.if_counter += 1
 
     @_wrap_output_in_xml_tag('expression')
     def compile_expression(self):
