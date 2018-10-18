@@ -72,12 +72,6 @@ class CompilationEngine:
     def _write(self, content):
         self.output_handle.write(self._get_indent() + content)
 
-    def _write_identifier_string(self, category, defined_or_used, kind, st_index):
-        self._write(f'\tcategory: {category}\n')
-        self._write(f'\tdefined or used?: {defined_or_used}\n')
-        self._write(f'\trepresents one of [var, argument, static, field]: {kind}\n')
-        self._write(f'\tsymbol table index: {st_index}\n')
-
     def _get_identifier(self):
         return self.tokenizer.identifier()
 
@@ -181,12 +175,21 @@ class CompilationEngine:
 
         if self._is_symbol() and self._symbol_in('.'):
             if name in self.symbol_table:
-                print(f'found name in symbol table: {name}.')
                 # set this argument if it's in the symbol table.  Otherwise, It's a clasname
-                kind = self.kind_of(name)
-                index = self.index_of(name)
+                kind = self.symbol_table.kind_of(name)
+                index = self.symbol_table.index_of(name)
                 self._write_identifier_string(kind, 'used', kind, index)
-                self.write_push(kind, index)
+
+                if kind == 'FIELD':
+                    object_field = True
+                    kind = 'this'
+                    self.vm_writer.write_push('pointer', 0)
+                    self.vm_writer.write_push('this', 0)
+                    self.vm_writer.write_push('constant', index)
+                    self.vm_writer.write_arithmetic('add')
+                    self.vm_writer.write_pop('pointer', 0)
+                else:
+                    self.vm_writer.write_push(kind, index)
                 n_args += 1
             else:
                 self._write_identifier_string('class', 'used', False, False)
@@ -194,6 +197,8 @@ class CompilationEngine:
             self._compile_symbol() # .
             name += '.' + self._compile_identifier() # subroutineName
             self._write_identifier_string('subroutine', 'used', False, False)
+        else:
+            name = self.class_name + '.' + name
 
         self._compile_symbol() # (
         n_args += self.compile_expression_list()
@@ -204,57 +209,36 @@ class CompilationEngine:
     @_wrap_output_in_xml_tag('class')
     def compile_class(self):
         # Tokenzizer is already advanced, like in other methods.
-        category = self._compile_keyword() # class
+        self._compile_keyword() # class
         name = self._compile_identifier() # className
-        self._write_identifier_string(category, 'defined', False, None)
+
         self.class_name = name
 
         self._compile_symbol() # {
 
-        num_fields = 0
         while self._keyword_in(CLASS_VAR_DEC_KEYWORD):
-            num_fields += self.compile_class_var_dec()
-        self.num_fields = num_fields
+            self.compile_class_var_dec()
 
         while self._keyword_in(SUBROUTINE_KEYWORDS):
             self.compile_subroutine()
 
-        # NOTE: didn't use compile symbol because advance would cause an error
         self._write(self.tokenizer.symbol()) # }
 
     @_wrap_output_in_xml_tag('classVarDec')
     def compile_class_var_dec(self):
-        if not self._keyword_in(['static', 'field']):
-            raise Exception('class variable declarations must start with "static" or "field"')
+        field_or_static = self._compile_keyword() # field or static
+        assert(field_or_static in CLASS_VAR_DEC_KEYWORD)
 
-        kind = self._compile_keyword() # field or static
         type_ = self._compile_type() # type
         name = self._compile_identifier() # varName
-        self.symbol_table.define(name, type_, kind)
-        index = self.symbol_table.index_of(name)
-        self._write_identifier_string(kind, 'defined', kind, index)
+        self.symbol_table.define(name, type_, field_or_static)
 
-        num_fields = 1
         while self._is_symbol() and self._symbol_in(','):
-            num_fields += 1
             self._compile_symbol() # ','
             name = self._compile_identifier() # varName
-
-            if kind == 'static':
-                self.symbol_table.define(name, type_, kind)
-                index = self.symbol_table.index_of(name)
-            else:
-                print('need to handle the field kind')
-                pass
-
-            self._write_identifier_string(kind, 'defined', kind, index)
+            self.symbol_table.define(name, type_, field_or_static)
 
         self._compile_symbol() # ';'
-
-        if kind == 'field':
-            return num_fields
-        else:
-            return 0
 
     @_wrap_output_in_xml_tag('subroutineDec')
     def compile_subroutine(self):
@@ -270,9 +254,8 @@ class CompilationEngine:
             type_ = self._compile_type()
 
         name = self._compile_identifier() # subroutineName
-        if subroutine_kind in ['constructor', 'function']:
-            name = self.class_name + '.' + name
-        self._write_identifier_string('subroutine', 'defined', False, None)
+        # if subroutine_kind in ['constructor', 'function']:
+        name = self.class_name + '.' + name
 
         self._compile_symbol() # (
         self.compile_parameter_list()
@@ -290,8 +273,9 @@ class CompilationEngine:
         else: # compiling a method
             self.vm_writer.write_function(name, num_locals + 1)
 
+        num_fields = self.symbol_table.get_num_fields()
         if subroutine_kind == 'constructor':
-            self.vm_writer.write_call('Memory.alloc', self.num_fields)
+            self.vm_writer.write_call('Memory.alloc', num_fields)
             self.vm_writer.write_pop('this', 0)
 
         if not type_:
@@ -308,14 +292,12 @@ class CompilationEngine:
 
             elif self._is_identifier():
                 name = self._compile_identifier() # custom type
-                self._write_identifier_string('class', 'used', False, False)
                 type_ = self.symbol_table.type_of(name)
 
             name = self._compile_identifier() # varName
             self.symbol_table.define(name, type_, 'ARG')
             index = self.symbol_table.index_of(name)
             print(f'compile_parameter_list...name: {name}, index: {index}')
-            self._write_identifier_string('argument', 'defined', 'argument', index)
 
             if self._is_symbol() and self._symbol_in(','):
                 self._compile_symbol()
@@ -333,7 +315,6 @@ class CompilationEngine:
         name = self._compile_identifier() # varName
         self.symbol_table.define(name, type_, kind)
         st_index = self.symbol_table.index_of(name)
-        self._write_identifier_string(kind, 'defined', kind, st_index)
 
         while self._is_symbol() and self._symbol_in(','):
             num_vars_declared += 1
@@ -342,7 +323,6 @@ class CompilationEngine:
             name = self._compile_identifier() # varName
             self.symbol_table.define(name, type_, kind)
             st_index = self.symbol_table.index_of(name)
-            self._write_identifier_string(kind, 'defined', kind, st_index)
 
         self._compile_symbol() # ;
 
@@ -385,7 +365,16 @@ class CompilationEngine:
         name = self._compile_identifier() # varName
         kind = self.symbol_table.kind_of(name)
         index = self.symbol_table.index_of(name)
-        self._write_identifier_string(kind, 'used', kind, index)
+
+        object_field = False
+        if kind == 'FIELD':
+            object_field = True
+            kind = 'this'
+            self.vm_writer.write_push('pointer', 0)
+            self.vm_writer.write_push('this', 0)
+            self.vm_writer.write_push('constant', index)
+            self.vm_writer.write_arithmetic('add')
+            self.vm_writer.write_pop('pointer', 0)
 
         array_entry = False
         if self._is_symbol() and self._symbol_in('['):
@@ -402,7 +391,12 @@ class CompilationEngine:
 
         if array_entry:
             self.vm_writer.write_pop('that', 0)
-        else:
+        if object_field:
+            self.vm_writer.write_pop('this', 0)
+            self.vm_writer.write_pop('pointer', 0)
+
+        if not object_field and not array_entry:
+            print(f'compile_let...leftovers: kind: {kind}, index: {index}, name: {name}, class: {self.class_name}')
             self.vm_writer.write_pop(kind, index)
 
         self._compile_symbol() # ;
@@ -520,8 +514,17 @@ class CompilationEngine:
             name = self._compile_identifier() # subroutineName | className | varName
             kind = self.symbol_table.kind_of(name)
             index = self.symbol_table.index_of(name)
-            self._write_identifier_string(kind, 'used', kind, index)
 
+
+            object_field = False
+            if kind == 'FIELD':
+                object_field = True
+                kind = 'this'
+                self.vm_writer.write_push('pointer', 0)
+                self.vm_writer.write_push('this', 0)
+                self.vm_writer.write_push('constant', index)
+                self.vm_writer.write_arithmetic('add')
+                self.vm_writer.write_pop('pointer', 0)
 
             if self._is_symbol() and self._symbol_in('['):
                 self.vm_writer.write_push(kind, index)
@@ -533,15 +536,12 @@ class CompilationEngine:
                 self.vm_writer.write_push('that', 0)
 
             elif self._is_symbol() and self._symbol_in('.'):
-
-                #### This is probably wrong, though I might have to do something like this
-                #### to look up a field.
-                # self.vm_writer.write_push(kind, index)
-                ####
-
                 self._compile_symbol() # .
 
-                # subroutineName ( expressionList )
+                if name in self.symbol_table: # it's an object
+                    self.vm_writer.write_push(kind, index)
+                    self.vm_writer.write_pop('pointer', '0')
+
                 name += '.' + self._compile_identifier()
 
                 self._compile_symbol() # (
@@ -552,13 +552,17 @@ class CompilationEngine:
             else:
                 self.vm_writer.write_push(kind, index)
 
+            if object_field:
+                self.vm_writer.write_pop('this', 0)
+                self.vm_writer.write_pop('pointer', 0)
+
         else:
             raise Exception('Could not parse terminal')
 
     @_wrap_output_in_xml_tag('expressionList')
     def compile_expression_list(self):
         if self._is_symbol() and self._symbol_in(')'):
-            return
+            return 0
 
         self.compile_expression()
 

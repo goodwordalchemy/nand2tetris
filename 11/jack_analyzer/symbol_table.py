@@ -24,12 +24,12 @@ class SymbolTable:
         index = self.var_count(kind)
         self.var_counts[kind] += 1
 
-        if kind == 'STATIC':
+        if kind in CLASS_IDENTIFIER_KINDS:
             scope = self.class_scope
         elif kind in SUBROUTINE_IDENTIFIER_KINDS:
             scope = self.subroutine_scope
         else:
-            raise Exception('identifiers of kind, "{kind}" should not be included in symbol table')
+            raise Exception(f'identifiers of kind, "{kind}" should not be included in symbol table')
 
         scope[name] = {'type': type_, 'kind': kind, 'index': index}
 
@@ -59,3 +59,6 @@ class SymbolTable:
         index = self._get_scope_property(name, 'index')
 
         return index
+
+    def get_num_fields(self):
+        return self.var_counts['FIELD']
