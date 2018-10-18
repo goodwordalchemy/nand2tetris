@@ -402,7 +402,6 @@ class CompilationEngine:
         self.vm_writer.write_label(f'WHILE_END{while_counter}')
         self._compile_symbol() # }
 
-
     @_wrap_output_in_xml_tag('returnStatement')
     def compile_return(self):
         self._compile_keyword() # return
