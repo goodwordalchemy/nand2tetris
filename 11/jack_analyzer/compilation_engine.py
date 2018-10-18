@@ -5,7 +5,7 @@ from .symbol_table import SymbolTable
 from .vm_writer import VMWriter
 
 INDENT_CHAR = '  '
-TERMINAL_TAG_PATTERN =  r'^<(\w+?)> (\S+?) </\w+>\n$'
+TERMINAL_TAG_PATTERN =  r'^<(\w+?)> (.+?) </\w+>\n$'
 
 def _xml_tag(tagname, inner):
     return '<{tagname}> {inner} </{tagname}>\n'.format(
@@ -59,10 +59,12 @@ class CompilationEngine:
                 self._write('<{}>\n'.format(tagname))
                 self.recursion_depth += 1
 
-                func(self)
+                result = func(self)
 
                 self.recursion_depth -= 1
                 self._write('</{}>\n'.format(tagname))
+
+                return result
 
             return wrap
         return decorator_wrap_output
@@ -185,7 +187,7 @@ class CompilationEngine:
                 self.write_push(kind, index)
                 n_args += 1
             else:
-                name = self.class_name + '.' name
+                name = self.class_name + '.' +  name
                 self._write_identifier_string('class', 'used', False, False)
 
             self._compile_symbol() # .
@@ -271,7 +273,9 @@ class CompilationEngine:
 
         num_locals = 0
         while self._is_keyword() and self._keyword_in('var'):
-            num_locals += self.compile_var_dec()
+            num_vars_declared = self.compile_var_dec()
+            print(f'locals: {num_locals}, num_vars: {num_vars_declared}')
+            num_locals += num_vars_declared
 
         if subroutine_kind in ['constructor', 'function']:
             self.vm_writer.write_function(name, num_locals)
@@ -282,13 +286,11 @@ class CompilationEngine:
             self.vm_writer.write_call('Memory.alloc', self.num_fields)
             self.vm_writer.write_pop('this', 0)
 
-        self.compile_statements()
-        self._compile_symbol() # }
-
         if not type_:
             self.vm_writer.write_push('constant', 0)
 
-        self.vm_writer.write_return()
+        self.compile_statements()
+        self._compile_symbol() # }
 
     @_wrap_output_in_xml_tag('parameterList')
     def compile_parameter_list(self):
@@ -324,8 +326,10 @@ class CompilationEngine:
         st_index = self.symbol_table.index_of(name)
         self._write_identifier_string(kind, 'defined', kind, st_index)
 
+        print(f'in compile_var dec: num_vars: {num_vars_declared}')
         while self._is_symbol() and self._symbol_in(','):
             num_vars_declared += 1
+            print(f'in compile_var dec while: num_vars: {num_vars_declared}')
 
             self._compile_symbol() # ,
             self._compile_identifier() # varName
@@ -334,6 +338,8 @@ class CompilationEngine:
             self._write_identifier_string(kind, 'defined', kind, st_index)
 
         self._compile_symbol() # ;
+
+        print(f'in compile_var dec end-while: num_vars: {num_vars_declared}')
 
         return num_vars_declared
 
@@ -380,12 +386,12 @@ class CompilationEngine:
             self._compile_symbol() # [
             result = self.compile_expression()
             self._compile_symbol() # ]
-            self.vm_writer.write_arithmetic('add')
-            self.vm_writer.pop('pointer', 1)
+            self.vm_writer.write_arithmetic('+')
+            self.vm_writer.write_pop('pointer', 1)
 
         self._compile_symbol() # =
         self.compile_expression()
-        self.vm_writer.pop('that', 0)
+        self.vm_writer.write_pop('that', 0)
         self._compile_symbol() # ;
 
     @_wrap_output_in_xml_tag('whileStatement')
@@ -411,6 +417,7 @@ class CompilationEngine:
         if not self._is_symbol():
             self.compile_expression()
 
+        self.vm_writer.write_return()
         self._compile_symbol() # ;
 
     @_wrap_output_in_xml_tag('ifStatement')
@@ -451,13 +458,13 @@ class CompilationEngine:
     def compile_term(self):
         if self._is_int_const():
             value = self._compile_int()
-            self.vm_writer.push('constant', value)
+            self.vm_writer.write_push('constant', value)
 
         elif self._is_string_const():
             string = self._compile_string()
 
             for letter in string:
-                self.push('constant', ord(letter))
+                self.vm_writer.write_push('constant', ord(letter))
 
             self.vm_writer.write_call('String.appendChar', len(string))
 
@@ -491,12 +498,12 @@ class CompilationEngine:
 
 
             if self._is_symbol() and self._symbol_in('['):
-                self.push(kind, index)
+                self.vm_writer.write_push(kind, index)
                 self._compile_symbol() # [
                 self.compile_expression() # expression
                 self._compile_symbol() # ]
-                self.vm_writer.write_arithmetic('add')
-                self.vm_writer.pop('pointer', 1)
+                self.vm_writer.write_arithmetic('+')
+                self.vm_writer.write_pop('pointer', 1)
 
             elif self._is_symbol() and self._symbol_in('.'):
                 self.vm_writer.write_push(kind, index)

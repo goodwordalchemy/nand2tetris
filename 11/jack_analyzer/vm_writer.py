@@ -40,7 +40,7 @@ class VMWriter:
     def write_function(self, name, nLocals):
         self._write(f'function {name} {nLocals}')
 
-    def write_return(self)
+    def write_return(self):
         self._write(f'return')
 
     def close(self):
