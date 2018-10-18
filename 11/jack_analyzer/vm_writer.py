@@ -3,7 +3,9 @@ TAB = '\t'
 OP_SYMBOL_TO_VM_COMMAND_MAPPER = {
     '+': 'add', '-': 'sub', '*': 'call Math.multiply 2', '/': 'call Math.divide 2',
     '&amp;': 'and', '|': 'or', '&lt;': 'lt', '&gt;': 'gt', '=':'eq',
-    '~': 'not',
+}
+UNARY_OP_SYMBOL_TO_CM_COMMAND_MAPPER = {
+    '-': 'neg', '~': 'not'
 }
 KIND_TO_SEGMENT_MAPPER = {
     'VAR': 'local', 'ARG': 'argument', 'STATIC': 'static'
@@ -29,7 +31,6 @@ class VMWriter:
         self._write(f'pop {segment} {index}')
 
     def write_arithmetic(self, command):
-        command = OP_SYMBOL_TO_VM_COMMAND_MAPPER[command]
         self._write(command)
 
     def write_label(self, label):

@@ -2,7 +2,7 @@ import functools
 import re
 
 from .symbol_table import SymbolTable
-from .vm_writer import VMWriter
+from .vm_writer import OP_SYMBOL_TO_VM_COMMAND_MAPPER, UNARY_OP_SYMBOL_TO_CM_COMMAND_MAPPER, VMWriter
 
 INDENT_CHAR = '  '
 TERMINAL_TAG_PATTERN =  r'^<(\w+?)> (.+?) </\w+>\n$'
@@ -389,14 +389,12 @@ class CompilationEngine:
         array_entry = False
         if self._is_symbol() and self._symbol_in('['):
             array_entry = True
-            # self.vm_writer._write('### starting array access')
             self.vm_writer.write_push(kind, index)
             self._compile_symbol() # [
             result = self.compile_expression()
             self._compile_symbol() # ]
-            self.vm_writer.write_arithmetic('+')
+            self.vm_writer.write_arithmetic('add')
             self.vm_writer.write_pop('pointer', 1)
-            # self.vm_writer._write('### ending array access')
 
         self._compile_symbol() # =
         self.compile_expression()
@@ -415,7 +413,7 @@ class CompilationEngine:
         self._compile_symbol() # (
         self.compile_expression()
         self._compile_symbol() # )
-        self.vm_writer.write_arithmetic('~')
+        self.vm_writer.write_arithmetic('not')
         self.vm_writer.write_if(f'WHILE_END{self.while_counter}')
 
         self._compile_symbol() # {
@@ -465,7 +463,9 @@ class CompilationEngine:
         while self._is_symbol() and self._symbol_in(OP_SYMBOLS):
             symbol = self._compile_symbol() # op
             self.compile_term()
-            self.vm_writer.write_arithmetic(symbol)
+
+            operation = OP_SYMBOL_TO_VM_COMMAND_MAPPER[symbol]
+            self.vm_writer.write_arithmetic(operation)
 
     @_wrap_output_in_xml_tag('term')
     def compile_term(self):
@@ -498,8 +498,11 @@ class CompilationEngine:
 
         elif self._is_symbol() and self._symbol_in(UNARY_OP_KEYWORDS):
             symbol = self._compile_symbol() # unaryOp
-            self.vm_writer.write_arithmetic(symbol)
+
             self.compile_term()
+
+            operation = UNARY_OP_SYMBOL_TO_CM_COMMAND_MAPPER[symbol]
+            self.vm_writer.write_arithmetic(operation)
 
         # varName |
         # varName[expression] |
@@ -519,7 +522,7 @@ class CompilationEngine:
                 self._compile_symbol() # [
                 self.compile_expression() # expression
                 self._compile_symbol() # ]
-                self.vm_writer.write_arithmetic('+')
+                self.vm_writer.write_arithmetic('add')
                 self.vm_writer.write_pop('pointer', 1)
 
             elif self._is_symbol() and self._symbol_in('.'):
