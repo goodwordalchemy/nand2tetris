@@ -389,11 +389,14 @@ class CompilationEngine:
         array_entry = False
         if self._is_symbol() and self._symbol_in('['):
             array_entry = True
+            # self.vm_writer._write('### starting array access')
+            self.vm_writer.write_push(kind, index)
             self._compile_symbol() # [
             result = self.compile_expression()
             self._compile_symbol() # ]
             self.vm_writer.write_arithmetic('+')
             self.vm_writer.write_pop('pointer', 1)
+            # self.vm_writer._write('### ending array access')
 
         self._compile_symbol() # =
         self.compile_expression()
