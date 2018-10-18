@@ -6,9 +6,10 @@ from .utils import get_input_files, get_output_filename
 def analyze_jack(filename):
     tokenizer = JackTokenizer(filename)
 
-    output_filename = get_output_filename(filename, '.vm')
+    output_filename = get_output_filename(filename, '.xml')
+    vm_output_filename = get_output_filename(filename, '.vm')
 
-    compilation_engine = CompilationEngine(tokenizer, output_filename)
+    compilation_engine = CompilationEngine(tokenizer, output_filename, vm_output_filename)
     compilation_engine.compile_class()
 
 

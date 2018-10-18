@@ -34,14 +34,17 @@ SUBROUTINE_KEYWORDS = ['constructor', 'function', 'method']
 UNARY_OP_KEYWORDS = ['-', '~']
 
 class CompilationEngine:
-    def __init__(self, tokenizer, output_filename):
+    def __init__(self, tokenizer, output_filename, vm_output_filename):
         self.tokenizer = tokenizer
         self.tokenizer.advance()
         self.output_handle = open(output_filename, 'w')
         self.recursion_depth = 0
 
         self.symbol_table = SymbolTable()
-        self.vm_writer = VMWriter(self.output_handle)
+        self.vm_writer = VMWriter(vm_output_filename)
+
+        self.if_counter = 0
+        self.while_counter = 0
 
     def _print_current_token(self, message=''):
         print(message, self.tokenizer.current_token)
@@ -169,17 +172,9 @@ class CompilationEngine:
 
         return type_
 
-    @_wrap_output_in_xml_tag('subroutineBody')
-    def compile_subroutine_body(self):
-        self._compile_symbol() # {
+    # @_wrap_output_in_xml_tag('subroutineBody')
 
-        while self._is_keyword() and self._keyword_in('var'):
-            self.compile_var_dec()
-
-        self.compile_statements()
-        self._compile_symbol() # }
-
-    def _compile_subroutine_call(self):
+    def _compile_subroutine_call(self, n_args=0):
         name = self._compile_identifier() # subroutineName | (className | varName)
 
         if self._is_symbol() and self._symbol_in('.'):
@@ -187,7 +182,10 @@ class CompilationEngine:
                 kind = self.kind_of(name)
                 index = self.index_of(name)
                 self._write_identifier_string(kind, 'used', kind, index)
+                self.write_push(kind, index)
+                n_args += 1
             else:
+                name = self.class_name + '.' name
                 self._write_identifier_string('class', 'used', False, False)
 
             self._compile_symbol() # .
@@ -195,8 +193,10 @@ class CompilationEngine:
             self._write_identifier_string('subroutine', 'used', False, False)
 
         self._compile_symbol() # (
-        self.compile_expression_list()
+        n_args += self.compile_expression_list()
         self._compile_symbol() # )
+
+        self.vm_writer.write_call(name, n_args)
 
     @_wrap_output_in_xml_tag('class')
     def compile_class(self):
@@ -204,10 +204,14 @@ class CompilationEngine:
         category = self._compile_keyword() # class
         name = self._compile_identifier() # className
         self._write_identifier_string(category, 'defined', False, None)
+        self.class_name = name
+
         self._compile_symbol() # {
 
+        num_fields = 0
         while self._keyword_in(CLASS_VAR_DEC_KEYWORD):
-            self.compile_class_var_dec()
+            num_fields += self.compile_class_var_dec()
+        self.num_fields = num_fields
 
         while self._keyword_in(SUBROUTINE_KEYWORDS):
             self.compile_subroutine()
@@ -227,7 +231,9 @@ class CompilationEngine:
         index = self.symbol_table.index_of(name)
         self._write_identifier_string(kind, 'defined', kind, index)
 
+        num_fields = 1
         while self._is_symbol() and self._symbol_in(','):
+            num_fields += 1
             self._compile_symbol() # ','
             name = self._compile_identifier() # varName
             self.symbol_table.define(name, type_, kind)
@@ -236,12 +242,17 @@ class CompilationEngine:
 
         self._compile_symbol() # ';'
 
+        if self._keyword_in('field'):
+            return num_fields
+        else:
+            return 0
+
     @_wrap_output_in_xml_tag('subroutineDec')
     def compile_subroutine(self):
         if not self._keyword_in(SUBROUTINE_KEYWORDS):
             raise Exception('subroutine declarations should be in {}'.format(SUBROUTINE_KEYWORDS))
         self.symbol_table.start_subroutine()
-        self._compile_keyword()  # ('constructor' | 'function' | 'method')
+        subroutine_kind = self._compile_keyword()  # ('constructor' | 'function' | 'method')
 
         if self._is_keyword() and self._keyword_in('void'):
             self._compile_keyword() # void
@@ -256,12 +267,32 @@ class CompilationEngine:
         self.compile_parameter_list()
         self._compile_symbol() # )
 
-        self.compile_subroutine_body()
+        self._compile_symbol() # {
+
+        num_locals = 0
+        while self._is_keyword() and self._keyword_in('var'):
+            num_locals += self.compile_var_dec()
+
+        if subroutine_kind in ['constructor', 'function']:
+            self.vm_writer.write_function(name, num_locals)
+        else: # compiling a method
+            self.vm_writer.write_function(name, num_locals + 1)
+
+        if subroutine_kind == 'constructor':
+            self.vm_writer.write_call('Memory.alloc', self.num_fields)
+            self.vm_writer.write_pop('this', 0)
+
+        self.compile_statements()
+        self._compile_symbol() # }
+
+        if not type_:
+            self.vm_writer.write_push('constant', 0)
+
+        self.vm_writer.write_return()
 
     @_wrap_output_in_xml_tag('parameterList')
     def compile_parameter_list(self):
         while self._is_keyword() or self._is_identifier():
-
             if self._is_keyword():
                 type_ = self._compile_keyword() # built-in type
 
@@ -278,10 +309,13 @@ class CompilationEngine:
             if self._is_symbol() and self._symbol_in(','):
                 self._compile_symbol()
 
+
     @_wrap_output_in_xml_tag('varDec')
     def compile_var_dec(self):
         if not self._keyword_in('var'):
             raise Exception('variable declaration must start with "var"')
+        num_vars_declared = 1
+
         kind = self._compile_keyword() # var
         type_ = self._compile_type()
 
@@ -291,6 +325,8 @@ class CompilationEngine:
         self._write_identifier_string(kind, 'defined', kind, st_index)
 
         while self._is_symbol() and self._symbol_in(','):
+            num_vars_declared += 1
+
             self._compile_symbol() # ,
             self._compile_identifier() # varName
             self.symbol_table.define(name, type_, kind)
@@ -298,6 +334,8 @@ class CompilationEngine:
             self._write_identifier_string(kind, 'defined', kind, st_index)
 
         self._compile_symbol() # ;
+
+        return num_vars_declared
 
     @_wrap_output_in_xml_tag('statements')
     def compile_statements(self):
@@ -326,6 +364,8 @@ class CompilationEngine:
         self._compile_subroutine_call()
         self._compile_symbol() # ;
 
+        self.vm_writer.write_pop('temp', 0)
+
     @_wrap_output_in_xml_tag('letStatement')
     def compile_let(self):
         self._compile_keyword() # let
@@ -333,15 +373,19 @@ class CompilationEngine:
         name = self._compile_identifier() # varName
         kind = self.symbol_table.kind_of(name)
         index = self.symbol_table.index_of(name)
+        self.vm_writer.write_push(kind, index)
         self._write_identifier_string(kind, 'used', kind, index)
 
         if self._is_symbol() and self._symbol_in('['):
             self._compile_symbol() # [
-            self.compile_expression()
+            result = self.compile_expression()
             self._compile_symbol() # ]
+            self.vm_writer.write_arithmetic('add')
+            self.vm_writer.pop('pointer', 1)
 
         self._compile_symbol() # =
         self.compile_expression()
+        self.vm_writer.pop('that', 0)
         self._compile_symbol() # ;
 
     @_wrap_output_in_xml_tag('whileStatement')
@@ -350,10 +394,15 @@ class CompilationEngine:
         self._compile_symbol() # (
         self.compile_expression()
         self._compile_symbol() # )
+        self.vm_writer.write_if(f'WHILE_START{self.while_counter}')
+        self.vm_writer.write_goto(f'WHILE_END{self.while_counter}')
 
         self._compile_symbol() # {
+        self.vm_writer.write_label(f'WHILE_START{self.while_counter}')
         self.compile_statements()
+        self.vm_writer.write_label(f'WHILE_END{self.while_counter}')
         self._compile_symbol() # }
+
 
     @_wrap_output_in_xml_tag('returnStatement')
     def compile_return(self):
@@ -369,37 +418,56 @@ class CompilationEngine:
         self._compile_keyword() # if
         self._compile_symbol() # (
         self.compile_expression()
+        self.vm_writer.write_if(f'IF_TRUE{self.if_counter}')
         self._compile_symbol() # )
 
         self._compile_symbol() # {
+        self.vm_writer.write_goto(f'IF_FALSE{self.if_counter}')
+        self.vm_writer.write_label(f'IF_TRUE{self.if_counter}')
         self.compile_statements()
         self._compile_symbol() # }
 
         if self._is_keyword() and self._keyword_in('else'):
+            self.vm_writer.write_label(f'IF_FALSE{self.if_counter}')
             self._compile_keyword() # else
             self._compile_symbol() # {
             self.compile_statements()
             self._compile_symbol() # }
+
+        self.if_counter += 1
 
     @_wrap_output_in_xml_tag('expression')
     def compile_expression(self):
         self.compile_term()
 
         while self._is_symbol() and self._symbol_in(OP_SYMBOLS):
-            self._compile_symbol() # op
+            symbol = self._compile_symbol() # op
+            self.vm_writer.write_arithmetic(symbol)
+
             self.compile_term()
 
 
     @_wrap_output_in_xml_tag('term')
     def compile_term(self):
         if self._is_int_const():
-            self._compile_int()
+            value = self._compile_int()
+            self.vm_writer.push('constant', value)
 
         elif self._is_string_const():
-            self._compile_string()
+            string = self._compile_string()
+
+            for letter in string:
+                self.push('constant', ord(letter))
+
+            self.vm_writer.write_call('String.appendChar', len(string))
 
         elif self._is_keyword() and self._keyword_in(KEYWORD_CONSANT_KEYWORDS):
-            self._compile_keyword()
+            kw = self._compile_keyword()
+
+            if kw in ['null', 'false']:
+                self.vm_writer.push('constant', 0)
+            else:
+                self.vm_writer.push('constant', -1)
 
         elif self._is_symbol() and self._symbol_in('('): # ( expression )
             self._compile_symbol()
@@ -407,7 +475,8 @@ class CompilationEngine:
             self._compile_symbol()
 
         elif self._is_symbol() and self._symbol_in(UNARY_OP_KEYWORDS):
-            self._compile_symbol() # unaryOp
+            symbol = self._compile_symbol() # unaryOp
+            self.vm_writer.write_arithmetic(symbol)
             self.compile_term()
 
         # varName |
@@ -420,14 +489,21 @@ class CompilationEngine:
             index = self.symbol_table.index_of(name)
             self._write_identifier_string(kind, 'used', kind, index)
 
+
             if self._is_symbol() and self._symbol_in('['):
+                self.push(kind, index)
                 self._compile_symbol() # [
                 self.compile_expression() # expression
                 self._compile_symbol() # ]
+                self.vm_writer.write_arithmetic('add')
+                self.vm_writer.pop('pointer', 1)
 
             elif self._is_symbol() and self._symbol_in('.'):
+                self.vm_writer.write_push(kind, index)
                 self._compile_symbol() # .
-                self._compile_subroutine_call()  # subroutineName ( expressionList )
+                self._compile_subroutine_call(n_args=1)  # subroutineName ( expressionList )
+            else:
+                self.vm_writer.write_push(kind, index)
 
         else:
             raise Exception('Could not parse terminal')
@@ -439,6 +515,10 @@ class CompilationEngine:
 
         self.compile_expression()
 
+        num_expressions = 1
         while self._is_symbol() and self._symbol_in(','):
+            num_expressions += 1
             self._compile_symbol()
             self.compile_expression()
+
+        return num_expressions

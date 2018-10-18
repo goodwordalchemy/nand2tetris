@@ -1,5 +1,11 @@
 TAB = '\t'
 
+OP_SYMBOL_TO_VM_COMMAND_MAPPER = {
+    '+': 'add', '-': 'sub', '*': 'Math.multiply', '/': 'Math.divide',
+    '&amp;': 'and', '|': 'or', '&lt;': 'lt', '&gt;': 'gt', '=':'eq',
+    '~': 'not',
+}
+
 class VMWriter:
     def __init__(self, output_file):
         self.output_handle = open(output_file, 'w')
@@ -8,12 +14,15 @@ class VMWriter:
         self.output_handle.write(TAB * tabs + content)
 
     def write_push(self, segment, index):
+        segment = segment.lower()
         self._write(f'push {segment} {index}')
 
     def write_pop(self, segment, index):
+        segment = segment.lower()
         self._write(f'pop {segment} {index}')
 
     def write_arithmetic(self, command):
+        command = OP_SYMBOL_TO_VM_COMMAND_MAPPER[command]
         self._write(command)
 
     def write_label(self, label):
