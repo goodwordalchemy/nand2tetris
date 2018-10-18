@@ -62,3 +62,6 @@ class SymbolTable:
 
     def get_num_fields(self):
         return self.var_counts['FIELD']
+
+    def get_num_locals(self):
+        return self.var_counts['VAR']

@@ -156,13 +156,11 @@ class CompilationEngine:
         return _get_terminal_value(symbol_value)
 
     def _compile_type(self):
-        if self._is_keyword() and self._keyword_in(['int', 'char', 'boolean']):
+        if self._is_keyword() and self._keyword_in(['int', 'char', 'boolean', 'void']):
             type_ = self._compile_keyword() # built-in type
 
         elif self._is_identifier():
-            name = type_ = self._compile_identifier() # custom type
-            self._write_identifier_string('class', 'used', False, False)
-
+            type_ = self._compile_identifier() # custom type
         else:
             raise Exception('Error compiling type')
 
@@ -178,7 +176,6 @@ class CompilationEngine:
                 # set this argument if it's in the symbol table.  Otherwise, It's a clasname
                 kind = self.symbol_table.kind_of(name)
                 index = self.symbol_table.index_of(name)
-                self._write_identifier_string(kind, 'used', kind, index)
 
                 if kind == 'FIELD':
                     object_field = True
@@ -192,11 +189,10 @@ class CompilationEngine:
                     self.vm_writer.write_push(kind, index)
                 n_args += 1
             else:
-                self._write_identifier_string('class', 'used', False, False)
+                pass
 
             self._compile_symbol() # .
             name += '.' + self._compile_identifier() # subroutineName
-            self._write_identifier_string('subroutine', 'used', False, False)
         else:
             name = self.class_name + '.' + name
 
@@ -244,17 +240,13 @@ class CompilationEngine:
     def compile_subroutine(self):
         if not self._keyword_in(SUBROUTINE_KEYWORDS):
             raise Exception('subroutine declarations should be in {}'.format(SUBROUTINE_KEYWORDS))
+
         self.symbol_table.start_subroutine()
+
         subroutine_kind = self._compile_keyword()  # ('constructor' | 'function' | 'method')
-
-        if self._is_keyword() and self._keyword_in('void'):
-            self._compile_keyword() # void
-            type_ = None
-        else:
-            type_ = self._compile_type()
-
+        type_ = self._compile_type()
         name = self._compile_identifier() # subroutineName
-        # if subroutine_kind in ['constructor', 'function']:
+
         name = self.class_name + '.' + name
 
         self._compile_symbol() # (
@@ -263,24 +255,25 @@ class CompilationEngine:
 
         self._compile_symbol() # {
 
-        num_locals = 0
         while self._is_keyword() and self._keyword_in('var'):
-            num_vars_declared = self.compile_var_dec()
-            num_locals += num_vars_declared
+            self.compile_var_dec()
 
-        if subroutine_kind in ['constructor', 'function']:
-            self.vm_writer.write_function(name, num_locals)
-        else: # compiling a method
-            self.vm_writer.write_function(name, num_locals + 1)
-
+        num_locals = self.symbol_table.get_num_locals()
         num_fields = self.symbol_table.get_num_fields()
+
         if subroutine_kind == 'constructor':
+            self.vm_writer.write_function(name, num_locals)
             self.vm_writer.write_call('Memory.alloc', num_fields)
             self.vm_writer.write_pop('this', 0)
 
-        if not type_:
-            self.vm_writer.write_push('constant', 0)
+        elif subroutine_kind == 'function':
+            self.vm_writer.write_function(name, num_locals)
 
+        else:
+            self.vm_writer.write_function(name, num_locals + 1)
+
+        if type_ == 'void':
+            self.vm_writer.write_push('constant', 0)
         self.compile_statements()
         self._compile_symbol() # }
 
