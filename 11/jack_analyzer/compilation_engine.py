@@ -384,21 +384,24 @@ class CompilationEngine:
 
     @_wrap_output_in_xml_tag('whileStatement')
     def compile_while(self):
+        while_counter = self.while_counter
+        self.while_counter += 1
+
         self._compile_keyword() # while
-        self.vm_writer.write_label(f'WHILE_START{self.while_counter}')
+        self.vm_writer.write_label(f'WHILE_START{while_counter}')
+
         self._compile_symbol() # (
         self.compile_expression()
         self._compile_symbol() # )
         self.vm_writer.write_arithmetic('not')
-        self.vm_writer.write_if(f'WHILE_END{self.while_counter}')
 
         self._compile_symbol() # {
+        self.vm_writer.write_if(f'WHILE_END{while_counter}')
         self.compile_statements()
-        self.vm_writer.write_goto(f'WHILE_START{self.while_counter}')
-        self.vm_writer.write_label(f'WHILE_END{self.while_counter}')
+        self.vm_writer.write_goto(f'WHILE_START{while_counter}')
+        self.vm_writer.write_label(f'WHILE_END{while_counter}')
         self._compile_symbol() # }
 
-        self.while_counter += 1
 
     @_wrap_output_in_xml_tag('returnStatement')
     def compile_return(self):
@@ -434,6 +437,7 @@ class CompilationEngine:
             self._compile_symbol() # {
             self.compile_statements()
             self._compile_symbol() # }
+
         self.vm_writer.write_label(f'IF_TRUE{if_index}')
 
 
