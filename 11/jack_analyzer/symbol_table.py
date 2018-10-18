@@ -6,8 +6,8 @@ IDENTIFIER_KINDS = CLASS_IDENTIFIER_KINDS + SUBROUTINE_IDENTIFIER_KINDS
 class SymbolTable:
     def __init__(self):
         self.class_scope = {}
-        self.start_subroutine()
         self.var_counts = {ik: 0 for ik in IDENTIFIER_KINDS}
+        self.start_subroutine()
 
     def __contains__(self, name):
         return name in self.subroutine_scope or name in self.class_scope
@@ -15,8 +15,10 @@ class SymbolTable:
     def start_subroutine(self):
         self.subroutine_scope = {}
 
+        for si in SUBROUTINE_IDENTIFIER_KINDS:
+            self.var_counts[si] = 0
+
     def define(self, name, type_, kind):
-        print(f'defining...name: {name}, type_:{type_}, kind: {kind}')
         kind = kind.upper()
 
         index = self.var_count(kind)

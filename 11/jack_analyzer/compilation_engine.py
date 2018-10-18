@@ -181,6 +181,7 @@ class CompilationEngine:
 
         if self._is_symbol() and self._symbol_in('.'):
             if name in self.symbol_table:
+                print(f'found name in symbol table: {name}.')
                 # set this argument if it's in the symbol table.  Otherwise, It's a clasname
                 kind = self.kind_of(name)
                 index = self.index_of(name)
@@ -244,6 +245,7 @@ class CompilationEngine:
                 index = self.symbol_table.index_of(name)
             else:
                 print('need to handle the field kind')
+                pass
 
             self._write_identifier_string(kind, 'defined', kind, index)
 
@@ -293,7 +295,6 @@ class CompilationEngine:
             self.vm_writer.write_pop('this', 0)
 
         if not type_:
-            print('compile_subroutine...pushing constant 0 for void method')
             self.vm_writer.write_push('constant', 0)
 
         self.compile_statements()
@@ -313,6 +314,7 @@ class CompilationEngine:
             name = self._compile_identifier() # varName
             self.symbol_table.define(name, type_, 'ARG')
             index = self.symbol_table.index_of(name)
+            print(f'compile_parameter_list...name: {name}, index: {index}')
             self._write_identifier_string('argument', 'defined', 'argument', index)
 
             if self._is_symbol() and self._symbol_in(','):
@@ -383,12 +385,10 @@ class CompilationEngine:
         name = self._compile_identifier() # varName
         kind = self.symbol_table.kind_of(name)
         index = self.symbol_table.index_of(name)
-        print(f'in let statement: kind: {kind}, name: {name}, index: {index}')
         self._write_identifier_string(kind, 'used', kind, index)
 
         array_entry = False
         if self._is_symbol() and self._symbol_in('['):
-            # self.vm_writer._write('## BEGINNING OF ARRAY ACCESS ##')
             array_entry = True
             self.vm_writer.write_push(kind, index)
             self._compile_symbol() # [
@@ -396,7 +396,6 @@ class CompilationEngine:
             self._compile_symbol() # ]
             self.vm_writer.write_arithmetic('add')
             self.vm_writer.write_pop('pointer', 1)
-            # self.vm_writer._write('## END OF ARRAY ACCESS ##')
 
         self._compile_symbol() # =
         self.compile_expression()
@@ -424,6 +423,7 @@ class CompilationEngine:
         self.vm_writer.write_label(f'WHILE_END{self.while_counter}')
         self._compile_symbol() # }
 
+        self.while_counter += 1
 
     @_wrap_output_in_xml_tag('returnStatement')
     def compile_return(self):
@@ -489,9 +489,11 @@ class CompilationEngine:
             kw = self._compile_keyword()
 
             if kw in ['null', 'false']:
-                self.vm_writer.push('constant', 0)
+                self.vm_writer.write_push('constant', 0)
             else:
-                self.vm_writer.push('constant', -1)
+                self.vm_writer.write_push('constant', 1)
+                command = UNARY_OP_SYMBOL_TO_CM_COMMAND_MAPPER['-']
+                self.vm_writer.write_arithmetic(command)
 
         elif self._is_symbol() and self._symbol_in('('): # ( expression )
             self._compile_symbol()
@@ -511,11 +513,9 @@ class CompilationEngine:
         # subroutineCall: subroutineName ( expressionList ) |
         #                 (className | varName) . subroutineName ( expressionList )
         elif self._is_identifier():
-            print(f'compile_term...correctly identified identifier')
             name = self._compile_identifier() # subroutineName | className | varName
             kind = self.symbol_table.kind_of(name)
             index = self.symbol_table.index_of(name)
-            print(f'compile_term...symbol table lookup: name: {name}, kind: {kind}, index: {index}')
             self._write_identifier_string(kind, 'used', kind, index)
 
 
@@ -529,7 +529,6 @@ class CompilationEngine:
                 self.vm_writer.write_push('that', 0)
 
             elif self._is_symbol() and self._symbol_in('.'):
-                print(f'compile term...correctly identified class membership (.)')
 
                 #### This is probably wrong, though I might have to do something like this
                 #### to look up a field.
