@@ -264,7 +264,7 @@ class CompilationEngine:
         if subroutine_kind == 'constructor':
             self.vm_writer.write_function(name, num_locals)
             self.vm_writer.write_call('Memory.alloc', num_fields)
-            self.vm_writer.write_pop('this', 0)
+            self.vm_writer.write_pop('pointer', 0)
 
         elif subroutine_kind == 'function':
             self.vm_writer.write_function(name, num_locals)
@@ -274,6 +274,7 @@ class CompilationEngine:
 
         if type_ == 'void':
             self.vm_writer.write_push('constant', 0)
+
         self.compile_statements()
         self._compile_symbol() # }
 
