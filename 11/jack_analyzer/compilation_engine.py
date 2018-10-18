@@ -181,17 +181,17 @@ class CompilationEngine:
 
         if self._is_symbol() and self._symbol_in('.'):
             if name in self.symbol_table:
+                # set this argument if it's in the symbol table.  Otherwise, It's a clasname
                 kind = self.kind_of(name)
                 index = self.index_of(name)
                 self._write_identifier_string(kind, 'used', kind, index)
                 self.write_push(kind, index)
                 n_args += 1
             else:
-                name = self.class_name + '.' +  name
                 self._write_identifier_string('class', 'used', False, False)
 
             self._compile_symbol() # .
-            self._compile_identifier() # subroutineName
+            name += '.' + self._compile_identifier() # subroutineName
             self._write_identifier_string('subroutine', 'used', False, False)
 
         self._compile_symbol() # (
@@ -238,13 +238,18 @@ class CompilationEngine:
             num_fields += 1
             self._compile_symbol() # ','
             name = self._compile_identifier() # varName
-            self.symbol_table.define(name, type_, kind)
-            index = self.symbol_table.index_of(name)
+
+            if kind == 'static':
+                self.symbol_table.define(name, type_, kind)
+                index = self.symbol_table.index_of(name)
+            else:
+                print('need to handle the field kind')
+
             self._write_identifier_string(kind, 'defined', kind, index)
 
         self._compile_symbol() # ';'
 
-        if self._keyword_in('field'):
+        if kind == 'field':
             return num_fields
         else:
             return 0
@@ -263,6 +268,8 @@ class CompilationEngine:
             type_ = self._compile_type()
 
         name = self._compile_identifier() # subroutineName
+        if subroutine_kind in ['constructor', 'function']:
+            name = self.class_name + '.' + name
         self._write_identifier_string('subroutine', 'defined', False, None)
 
         self._compile_symbol() # (
@@ -274,7 +281,6 @@ class CompilationEngine:
         num_locals = 0
         while self._is_keyword() and self._keyword_in('var'):
             num_vars_declared = self.compile_var_dec()
-            print(f'locals: {num_locals}, num_vars: {num_vars_declared}')
             num_locals += num_vars_declared
 
         if subroutine_kind in ['constructor', 'function']:
@@ -287,6 +293,7 @@ class CompilationEngine:
             self.vm_writer.write_pop('this', 0)
 
         if not type_:
+            print('compile_subroutine...pushing constant 0 for void method')
             self.vm_writer.write_push('constant', 0)
 
         self.compile_statements()
@@ -326,20 +333,17 @@ class CompilationEngine:
         st_index = self.symbol_table.index_of(name)
         self._write_identifier_string(kind, 'defined', kind, st_index)
 
-        print(f'in compile_var dec: num_vars: {num_vars_declared}')
         while self._is_symbol() and self._symbol_in(','):
             num_vars_declared += 1
-            print(f'in compile_var dec while: num_vars: {num_vars_declared}')
 
             self._compile_symbol() # ,
-            self._compile_identifier() # varName
+            name = self._compile_identifier() # varName
             self.symbol_table.define(name, type_, kind)
             st_index = self.symbol_table.index_of(name)
             self._write_identifier_string(kind, 'defined', kind, st_index)
 
         self._compile_symbol() # ;
 
-        print(f'in compile_var dec end-while: num_vars: {num_vars_declared}')
 
         return num_vars_declared
 
@@ -379,10 +383,12 @@ class CompilationEngine:
         name = self._compile_identifier() # varName
         kind = self.symbol_table.kind_of(name)
         index = self.symbol_table.index_of(name)
-        self.vm_writer.write_push(kind, index)
+        print(f'in let statement: kind: {kind}, name: {name}, index: {index}')
         self._write_identifier_string(kind, 'used', kind, index)
 
+        array_entry = False
         if self._is_symbol() and self._symbol_in('['):
+            array_entry = True
             self._compile_symbol() # [
             result = self.compile_expression()
             self._compile_symbol() # ]
@@ -391,21 +397,27 @@ class CompilationEngine:
 
         self._compile_symbol() # =
         self.compile_expression()
-        self.vm_writer.write_pop('that', 0)
+
+        if array_entry:
+            self.vm_writer.write_pop('that', 0)
+        else:
+            self.vm_writer.write_pop(kind, index)
+
         self._compile_symbol() # ;
 
     @_wrap_output_in_xml_tag('whileStatement')
     def compile_while(self):
         self._compile_keyword() # while
+        self.vm_writer.write_label(f'WHILE_START{self.while_counter}')
         self._compile_symbol() # (
         self.compile_expression()
         self._compile_symbol() # )
-        self.vm_writer.write_if(f'WHILE_START{self.while_counter}')
-        self.vm_writer.write_goto(f'WHILE_END{self.while_counter}')
+        self.vm_writer.write_arithmetic('~')
+        self.vm_writer.write_if(f'WHILE_END{self.while_counter}')
 
         self._compile_symbol() # {
-        self.vm_writer.write_label(f'WHILE_START{self.while_counter}')
         self.compile_statements()
+        self.vm_writer.write_goto(f'WHILE_START{self.while_counter}')
         self.vm_writer.write_label(f'WHILE_END{self.while_counter}')
         self._compile_symbol() # }
 
@@ -449,10 +461,8 @@ class CompilationEngine:
 
         while self._is_symbol() and self._symbol_in(OP_SYMBOLS):
             symbol = self._compile_symbol() # op
-            self.vm_writer.write_arithmetic(symbol)
-
             self.compile_term()
-
+            self.vm_writer.write_arithmetic(symbol)
 
     @_wrap_output_in_xml_tag('term')
     def compile_term(self):
@@ -463,10 +473,12 @@ class CompilationEngine:
         elif self._is_string_const():
             string = self._compile_string()
 
+            self.vm_writer.write_push('constant', len(string))
+            self.vm_writer.write_call('String.new', 1)
+
             for letter in string:
                 self.vm_writer.write_push('constant', ord(letter))
-
-            self.vm_writer.write_call('String.appendChar', len(string))
+                self.vm_writer.write_call('String.appendChar', 2)
 
         elif self._is_keyword() and self._keyword_in(KEYWORD_CONSANT_KEYWORDS):
             kw = self._compile_keyword()
@@ -491,9 +503,11 @@ class CompilationEngine:
         # subroutineCall: subroutineName ( expressionList ) |
         #                 (className | varName) . subroutineName ( expressionList )
         elif self._is_identifier():
+            print(f'compile_term...correctly identified identifier')
             name = self._compile_identifier() # subroutineName | className | varName
             kind = self.symbol_table.kind_of(name)
             index = self.symbol_table.index_of(name)
+            print(f'compile_term...symbol table lookup: name: {name}, kind: {kind}, index: {index}')
             self._write_identifier_string(kind, 'used', kind, index)
 
 
@@ -506,9 +520,23 @@ class CompilationEngine:
                 self.vm_writer.write_pop('pointer', 1)
 
             elif self._is_symbol() and self._symbol_in('.'):
-                self.vm_writer.write_push(kind, index)
+                print(f'compile term...correctly identified class membership (.)')
+
+                #### This is probably wrong, though I might have to do something like this
+                #### to look up a field.
+                # self.vm_writer.write_push(kind, index)
+                ####
+
                 self._compile_symbol() # .
-                self._compile_subroutine_call(n_args=1)  # subroutineName ( expressionList )
+
+                # subroutineName ( expressionList )
+                name += '.' + self._compile_identifier()
+
+                self._compile_symbol() # (
+                n_args = self.compile_expression_list()
+                self._compile_symbol() # )
+
+                self.vm_writer.write_call(name, n_args)
             else:
                 self.vm_writer.write_push(kind, index)
 

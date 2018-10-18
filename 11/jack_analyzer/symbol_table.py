@@ -16,15 +16,18 @@ class SymbolTable:
         self.subroutine_scope = {}
 
     def define(self, name, type_, kind):
+        print(f'defining...name: {name}, type_:{type_}, kind: {kind}')
         kind = kind.upper()
 
         index = self.var_count(kind)
         self.var_counts[kind] += 1
 
-        if kind in CLASS_IDENTIFIER_KINDS:
+        if kind == 'STATIC':
             scope = self.class_scope
         elif kind in SUBROUTINE_IDENTIFIER_KINDS:
             scope = self.subroutine_scope
+        else:
+            raise Exception('identifiers of kind, "{kind}" should not be included in symbol table')
 
         scope[name] = {'type': type_, 'kind': kind, 'index': index}
 
