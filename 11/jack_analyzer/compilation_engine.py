@@ -454,10 +454,6 @@ class CompilationEngine:
 
             return
 
-        # if name in self.symbol_table: # it's a method of the current class
-        #     self.vm_writer.write_push(kind, index)
-        #     self.vm_writer.write_pop('pointer', '0')
-
         # subroutineCall: 
 
         # subroutineName ( expressionList ) |
@@ -494,6 +490,7 @@ class CompilationEngine:
 
         # varName |
         elif name in self.symbol_table:
+            print(f'kind: {kind}')
             self.vm_writer.write_push(kind, index)
 
             return
