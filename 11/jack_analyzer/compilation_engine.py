@@ -143,7 +143,7 @@ class CompilationEngine:
             self.vm_writer.write_push('constant', ord(letter))
             self.vm_writer.write_call('String.appendChar', 2)
 
-        return _get_terminal_value(string_value)
+        return string_value
 
     def _compile_identifier(self):
         identifier_value = self.tokenizer.identifier()
@@ -536,7 +536,9 @@ class CompilationEngine:
             self._compile_int()
 
         elif self._is_string_const():
+            print('before compiling string')
             self._compile_string()
+            print('aftre compiling string')
 
         elif self._is_keyword() and self._keyword_in(KEYWORD_CONSANT_KEYWORDS):
             self._compile_keyword_contant()
