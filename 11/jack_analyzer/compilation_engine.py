@@ -418,10 +418,16 @@ class CompilationEngine:
         if kw in ['null', 'false']:
             self.vm_writer.write_push('constant', 0)
 
-        else:
+        elif kw == 'this':
+            self.vm_writer.write_push('pointer', 0)
+
+        elif kw == 'true':
             self.vm_writer.write_push('constant', 1)
             command = UNARY_OP_SYMBOL_TO_CM_COMMAND_MAPPER['-']
             self.vm_writer.write_arithmetic(command)
+
+        else:
+            raise Exception(f'uknown keyword constant: {kw}')
 
         return kw
 
