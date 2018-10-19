@@ -8,7 +8,7 @@ UNARY_OP_SYMBOL_TO_CM_COMMAND_MAPPER = {
     '-': 'neg', '~': 'not'
 }
 KIND_TO_SEGMENT_MAPPER = {
-    'VAR': 'local', 'ARG': 'argument', 'STATIC': 'static', 'field': 'this'
+    'VAR': 'local', 'ARG': 'argument', 'STATIC': 'static', 'FIELD': 'this'
 }
 
 class VMWriter:

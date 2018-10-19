@@ -477,8 +477,8 @@ class CompilationEngine:
         elif self._symbol_in('.'):
             if name in self.symbol_table:
                 # pushes this argument of instantiated object variable
-                segment = self.vm_writer.kind_of()
-                index = self.vm_writer.index_of()
+                segment = self.symbol_table.kind_of(name)
+                index = self.symbol_table.index_of(name)
                 self.vm_writer.write_push(segment, index)
 
             self._compile_symbol() # .
