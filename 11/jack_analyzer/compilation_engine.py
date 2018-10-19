@@ -177,43 +177,6 @@ class CompilationEngine:
 
         return type_
 
-    # @_wrap_output_in_xml_tag('subroutineBody')
-
-    def _compile_subroutine_call(self, n_args=0):
-        self.compile_term()
-        # name = self._compile_identifier() # subroutineName | (className | varName)
-
-        # if self._is_symbol() and self._symbol_in('.'):
-        #     if name in self.symbol_table:
-        #         # set this argument if it's in the symbol table.  Otherwise, It's a clasname
-        #         kind = self.symbol_table.kind_of(name)
-        #         index = self.symbol_table.index_of(name)
-
-        #         if kind == 'FIELD':
-        #             object_field = True
-        #             kind = 'this'
-        #             self.vm_writer.write_push('pointer', 0)
-        #             self.vm_writer.write_push('this', 0)
-        #             self.vm_writer.write_push('constant', index)
-        #             self.vm_writer.write_arithmetic('add')
-        #             self.vm_writer.write_pop('pointer', 0)
-        #         else:
-        #             self.vm_writer.write_push(kind, index)
-        #         n_args += 1
-        #     else:
-        #         pass
-
-        #     self._compile_symbol() # .
-        #     name += '.' + self._compile_identifier() # subroutineName
-        # else:
-        #     name = self.class_name + '.' + name
-
-        # self._compile_symbol() # (
-        # n_args += self.compile_expression_list()
-        # self._compile_symbol() # )
-
-        # self.vm_writer.write_call(name, n_args)
-
     @_wrap_output_in_xml_tag('class')
     def compile_class(self):
         # Tokenzizer is already advanced, like in other methods.
@@ -346,7 +309,7 @@ class CompilationEngine:
     @_wrap_output_in_xml_tag('doStatement')
     def compile_do(self):
         self._compile_keyword() # do
-        self._compile_subroutine_call()
+        self.compile_term()
         self._compile_symbol() # ;
 
         self.vm_writer.write_pop('temp', 0)
