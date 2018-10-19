@@ -247,6 +247,9 @@ class CompilationEngine:
 
         else:
             self.vm_writer.write_function(name, num_locals + 1)
+            self.vm_writer.write_push('argument', 0)
+            self.vm_writer.write_pop('pointer', '0')
+
 
         if type_ == 'void':
             self.vm_writer.write_push('constant', 0)
@@ -463,34 +466,43 @@ class CompilationEngine:
             name = self.class_name + '.' + name
 
             # push this argument and call it.
-            self.vm_writer.write_push('pointer', '0')
+            self.vm_writer.write_push('pointer', 0)
 
             n_args = self.compile_expression_list()
             self._compile_symbol() # )
 
-            self.vm_writer.write_call(name, n_args)
+            self.vm_writer.write_call(name, n_args + 1)
 
         #       (className | varName) . subroutineName ( expressionList )
         elif self._symbol_in('.'):
+            self._compile_symbol() # .
+            subroutine_name = self._compile_identifier()
+
             if name in self.symbol_table:
                 # pushes this argument of instantiated object variable
                 segment = self.symbol_table.kind_of(name)
                 index = self.symbol_table.index_of(name)
-                name = self.symbol_table.type_of(name)
+                type_ = self.symbol_table.type_of(name)
+
                 self.vm_writer.write_push(segment, index)
 
-            self._compile_symbol() # .
-            name += '.' + self._compile_identifier()
+                name = type_ + '.' + subroutine_name
+
+                n_args = 1
+            else:
+                name = name + '.' + subroutine_name
+                n_args = 0
 
             symbol = self._compile_symbol() # (
-            n_args = self.compile_expression_list()
+            n_args += self.compile_expression_list()
             self._compile_symbol() # )
 
+            if name == 'SquareGame.run':
+                print(f'n_args: {n_args}, segment: {segment}, index: {index}')
             self.vm_writer.write_call(name, n_args)
 
         # varName |
         elif name in self.symbol_table:
-            print(f'kind: {kind}')
             self.vm_writer.write_push(kind, index)
 
             return
