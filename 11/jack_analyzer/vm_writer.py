@@ -22,8 +22,8 @@ class VMWriter:
         segment = KIND_TO_SEGMENT_MAPPER.get(segment, segment)
         segment = segment.lower()
 
-        if segment == 'this':
-            index += 1
+        # if segment == 'this':
+        #     index += 1
 
         self._write(f'push {segment} {index}')
 
@@ -31,8 +31,8 @@ class VMWriter:
         segment = KIND_TO_SEGMENT_MAPPER.get(segment, segment)
         segment = segment.lower()
 
-        if segment == 'this':
-            index += 1
+        # if segment == 'this':
+        #     index += 1
 
         self._write(f'pop {segment} {index}')
 

@@ -238,7 +238,8 @@ class CompilationEngine:
 
         if subroutine_kind == 'constructor':
             self.vm_writer.write_function(name, num_locals)
-            self.vm_writer.write_call('Memory.alloc', num_fields)
+            self.vm_writer.write_push('constant', num_fields)
+            self.vm_writer.write_call('Memory.alloc', 1)
             self.vm_writer.write_pop('pointer', 0)
 
         elif subroutine_kind == 'function':
@@ -479,6 +480,7 @@ class CompilationEngine:
                 # pushes this argument of instantiated object variable
                 segment = self.symbol_table.kind_of(name)
                 index = self.symbol_table.index_of(name)
+                name = self.symbol_table.type_of(name)
                 self.vm_writer.write_push(segment, index)
 
             self._compile_symbol() # .
