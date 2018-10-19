@@ -180,38 +180,39 @@ class CompilationEngine:
     # @_wrap_output_in_xml_tag('subroutineBody')
 
     def _compile_subroutine_call(self, n_args=0):
-        name = self._compile_identifier() # subroutineName | (className | varName)
+        self.compile_term()
+        # name = self._compile_identifier() # subroutineName | (className | varName)
 
-        if self._is_symbol() and self._symbol_in('.'):
-            if name in self.symbol_table:
-                # set this argument if it's in the symbol table.  Otherwise, It's a clasname
-                kind = self.symbol_table.kind_of(name)
-                index = self.symbol_table.index_of(name)
+        # if self._is_symbol() and self._symbol_in('.'):
+        #     if name in self.symbol_table:
+        #         # set this argument if it's in the symbol table.  Otherwise, It's a clasname
+        #         kind = self.symbol_table.kind_of(name)
+        #         index = self.symbol_table.index_of(name)
 
-                if kind == 'FIELD':
-                    object_field = True
-                    kind = 'this'
-                    self.vm_writer.write_push('pointer', 0)
-                    self.vm_writer.write_push('this', 0)
-                    self.vm_writer.write_push('constant', index)
-                    self.vm_writer.write_arithmetic('add')
-                    self.vm_writer.write_pop('pointer', 0)
-                else:
-                    self.vm_writer.write_push(kind, index)
-                n_args += 1
-            else:
-                pass
+        #         if kind == 'FIELD':
+        #             object_field = True
+        #             kind = 'this'
+        #             self.vm_writer.write_push('pointer', 0)
+        #             self.vm_writer.write_push('this', 0)
+        #             self.vm_writer.write_push('constant', index)
+        #             self.vm_writer.write_arithmetic('add')
+        #             self.vm_writer.write_pop('pointer', 0)
+        #         else:
+        #             self.vm_writer.write_push(kind, index)
+        #         n_args += 1
+        #     else:
+        #         pass
 
-            self._compile_symbol() # .
-            name += '.' + self._compile_identifier() # subroutineName
-        else:
-            name = self.class_name + '.' + name
+        #     self._compile_symbol() # .
+        #     name += '.' + self._compile_identifier() # subroutineName
+        # else:
+        #     name = self.class_name + '.' + name
 
-        self._compile_symbol() # (
-        n_args += self.compile_expression_list()
-        self._compile_symbol() # )
+        # self._compile_symbol() # (
+        # n_args += self.compile_expression_list()
+        # self._compile_symbol() # )
 
-        self.vm_writer.write_call(name, n_args)
+        # self.vm_writer.write_call(name, n_args)
 
     @_wrap_output_in_xml_tag('class')
     def compile_class(self):
@@ -472,7 +473,7 @@ class CompilationEngine:
         self.vm_writer.write_arithmetic('add')
         self.vm_writer.write_pop('pointer', 1)
 
-    def _parse_terminal_identifier(self):
+    def _compile_terminal_identifier(self):
         # varName |
         # varName[expression] |
         # subroutineCall: subroutineName ( expressionList ) |
@@ -502,6 +503,7 @@ class CompilationEngine:
             name = self.class_name + '.' + name
 
             # push this argument and call it.
+            self.vm_writer.write_push('pointer', '0')
 
             n_args = self.compile_expression_list()
             self._compile_symbol() # )
@@ -510,6 +512,12 @@ class CompilationEngine:
 
         #       (className | varName) . subroutineName ( expressionList )
         elif self._symbol_in('.'):
+            if name in self.symbol_table:
+                # pushes this argument of instantiated object variable
+                segment = self.vm_writer.kind_of()
+                index = self.vm_writer.index_of()
+                self.vm_writer.write_push(segment, index)
+
             self._compile_symbol() # .
             name += '.' + self._compile_identifier()
 
@@ -548,7 +556,7 @@ class CompilationEngine:
             self._compile_unary_op()
 
         elif self._is_identifier():
-            self._parse_terminal_identifier()
+            self._compile_terminal_identifier()
 
         else:
             raise Exception('Could not parse terminal')
