@@ -481,8 +481,6 @@ class CompilationEngine:
         kind = self.symbol_table.kind_of(name)
         index = self.symbol_table.index_of(name)
 
-        print(f'parsing terminal identifier: {self.tokenizer.current_token}')
-
         # varName[expression] |
         if self._symbol_in('[') and name in self.symbol_table:
             self.vm_writer.write_push(kind, index)
@@ -505,7 +503,6 @@ class CompilationEngine:
 
             # push this argument and call it.
 
-            print('subroutine type 1')
             n_args = self.compile_expression_list()
             self._compile_symbol() # )
 
@@ -517,7 +514,6 @@ class CompilationEngine:
             name += '.' + self._compile_identifier()
 
             symbol = self._compile_symbol() # (
-            print(f'subroutine type 2...symbol={symbol}')
             n_args = self.compile_expression_list()
             self._compile_symbol() # )
 
@@ -525,7 +521,6 @@ class CompilationEngine:
 
         # varName |
         elif name in self.symbol_table:
-            print(f'compiling veriable terminal: {self.tokenizer.current_token}')
             self.vm_writer.write_push(kind, index)
 
             return
@@ -539,9 +534,7 @@ class CompilationEngine:
             self._compile_int()
 
         elif self._is_string_const():
-            print('before compiling string')
             self._compile_string()
-            print('aftre compiling string')
 
         elif self._is_keyword() and self._keyword_in(KEYWORD_CONSANT_KEYWORDS):
             self._compile_keyword_contant()
@@ -565,9 +558,7 @@ class CompilationEngine:
         if self._is_symbol() and self._symbol_in(')'):
             return 0
 
-        print('compiling expression list, compiling expression')
         self.compile_expression()
-        print('finshied compiling first expression in expression list...current_token: {self.tokenizer.current_token}')
 
         num_expressions = 1
         while self._is_symbol() and self._symbol_in(','):
