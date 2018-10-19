@@ -503,8 +503,6 @@ class CompilationEngine:
             n_args += self.compile_expression_list()
             self._compile_symbol() # )
 
-            if name == 'SquareGame.run':
-                print(f'n_args: {n_args}, segment: {segment}, index: {index}')
             self.vm_writer.write_call(name, n_args)
 
         # varName |
