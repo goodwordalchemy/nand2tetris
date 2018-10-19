@@ -59,6 +59,7 @@ class JackTokenizer:
         return len(self.token_list) > 0
 
     def advance(self):
+        print(self.current_token)
         if not self.has_more_tokens():
             raise Exception('No more tokens to tokenize!')
 

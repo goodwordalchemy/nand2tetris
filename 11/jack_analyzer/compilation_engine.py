@@ -125,15 +125,17 @@ class CompilationEngine:
         self._write(int_value)
         self.tokenizer.advance()
 
+        int_value = _get_terminal_value(int_value)
         self.vm_writer.write_push('constant', int_value)
 
-        return _get_terminal_value(int_value)
+        return int_value
 
     def _compile_string(self):
         string_value = self._get_string_const()
         self._write(string_value)
         self.tokenizer.advance()
 
+        string_value = _get_terminal_value(string_value)
         self.vm_writer.write_push('constant', len(string_value))
         self.vm_writer.write_call('String.new', 1)
 
@@ -360,11 +362,7 @@ class CompilationEngine:
         if self._is_symbol() and self._symbol_in('['):
             array_entry = True
             self.vm_writer.write_push(segment, index)
-            self._compile_symbol() # [
-            result = self.compile_expression()
-            self._compile_symbol() # ]
-            self.vm_writer.write_arithmetic('add')
-            self.vm_writer.write_pop('pointer', 1)
+            self._compile_array_access()
 
         self._compile_symbol() # =
         self.compile_expression()
@@ -467,6 +465,71 @@ class CompilationEngine:
         operation = UNARY_OP_SYMBOL_TO_CM_COMMAND_MAPPER[symbol]
         self.vm_writer.write_arithmetic(operation)
 
+    def _compile_array_access(self):
+        self._compile_symbol() # [
+        self.compile_expression()
+        self._compile_symbol() # ]
+        self.vm_writer.write_arithmetic('add')
+        self.vm_writer.write_pop('pointer', 1)
+
+    def _parse_terminal_identifier(self):
+        # varName |
+        # varName[expression] |
+        # subroutineCall: subroutineName ( expressionList ) |
+        #                 (className | varName) . subroutineName ( expressionList )
+        name = self._compile_identifier() # subroutineName | className | varName
+        kind = self.symbol_table.kind_of(name)
+        index = self.symbol_table.index_of(name)
+
+        # varName |
+        if not self._is_symbol() and name in self.symbol_table:
+            self.vm_writer.write_push(kind, index)
+
+            return
+
+        # varName[expression] |
+        if self._symbol_in('[') and name in self.symbol_table:
+            self.vm_writer.write_push(kind, index)
+            self._compile_array_access()
+            self.vm_writer.write_push('that', 0)
+
+            return
+
+        # if name in self.symbol_table: # it's a method of the current class
+        #     self.vm_writer.write_push(kind, index)
+        #     self.vm_writer.write_pop('pointer', '0')
+
+        # subroutineCall: 
+
+        # subroutineName ( expressionList ) |
+        if self._symbol_in('('):
+            # must be a method on the current object
+            self._compile_symbol() # (
+            name = self.class_name + '.' + name
+
+            # push this argument and call it.
+
+            print(1)
+            n_args = self.compile_expression_list()
+            self._compile_symbol() # )
+
+            self.vm_writer.write_call(name, n_args)
+
+        #       (className | varName) . subroutineName ( expressionList )
+        elif self._symbol_in('.'):
+            self._compile_symbol() # .
+            name += '.' + self._compile_identifier()
+
+            self._compile_symbol() # (
+            print(2)
+            n_args = self.compile_expression_list()
+            self._compile_symbol() # )
+
+            self.vm_writer.write_call(name, n_args)
+
+        else:
+            raise Exception(f'Could not parse term: {self.tokenizer.current_token}')
+
     @_wrap_output_in_xml_tag('term')
     def compile_term(self):
         if self._is_int_const():
@@ -486,40 +549,8 @@ class CompilationEngine:
         elif self._is_symbol() and self._symbol_in(UNARY_OP_KEYWORDS):
             self._compile_unary_op()
 
-        # varName |
-        # varName[expression] |
-        # subroutineCall: subroutineName ( expressionList ) |
-        #                 (className | varName) . subroutineName ( expressionList )
         elif self._is_identifier():
-            name = self._compile_identifier() # subroutineName | className | varName
-            kind = self.symbol_table.kind_of(name)
-            index = self.symbol_table.index_of(name)
-
-            if self._is_symbol() and self._symbol_in('['):
-                self.vm_writer.write_push(kind, index)
-                self._compile_symbol() # [
-                self.compile_expression() # expression
-                self._compile_symbol() # ]
-                self.vm_writer.write_arithmetic('add')
-                self.vm_writer.write_pop('pointer', 1)
-                self.vm_writer.write_push('that', 0)
-
-            elif self._is_symbol() and self._symbol_in('.'):
-                self._compile_symbol() # .
-
-                if name in self.symbol_table: # it's an object
-                    self.vm_writer.write_push(kind, index)
-                    self.vm_writer.write_pop('pointer', '0')
-
-                name += '.' + self._compile_identifier()
-
-                self._compile_symbol() # (
-                n_args = self.compile_expression_list()
-                self._compile_symbol() # )
-
-                self.vm_writer.write_call(name, n_args)
-            else:
-                self.vm_writer.write_push(kind, index)
+            self._parse_terminal_identifier()
 
         else:
             raise Exception('Could not parse terminal')
