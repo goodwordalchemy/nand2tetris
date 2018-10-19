@@ -457,9 +457,14 @@ class CompilationEngine:
 
         # varName[expression] |
         if self._symbol_in('[') and name in self.symbol_table:
+            self.vm_writer.write_push('pointer', 1)
             self.vm_writer.write_push(kind, index)
             self._compile_array_access()
             self.vm_writer.write_push('that', 0)
+
+            self.vm_writer.write_pop('temp', 1)
+            self.vm_writer.write_pop('pointer', 1)
+            self.vm_writer.write_push('temp', 1)
 
             return
 
