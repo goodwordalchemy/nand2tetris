@@ -224,6 +224,9 @@ class CompilationEngine:
 
         name = self.class_name + '.' + name
 
+        if subroutine_kind == 'method':
+            self.symbol_table.define('this', 'this', 'ARG')
+
         self._compile_symbol() # (
         self.compile_parameter_list()
         self._compile_symbol() # )
